@@ -1,0 +1,4 @@
+ai-service/.venv/
+**/application.properties
+# Model AI được tải
+ai-service/models/victsd-phobert/
