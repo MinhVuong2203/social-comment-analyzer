@@ -1,23 +1,5 @@
 import React, { useState, useEffect } from "react";
 
-/**
- * SocialCommentAnalyzer
- * -----------------------------------------------------------------------
- * Chuyển đổi từ file HTML gốc (Tailwind CDN + custom theme) sang React.
- *
- * Ghi chú khi tích hợp vào dự án của bạn:
- * 1) Component này dùng Tailwind CSS với "arbitrary values" (vd: bg-[#111319])
- *    thay vì phụ thuộc vào file tailwind.config gốc, để bạn có thể dùng ngay
- *    trong bất kỳ dự án Tailwind nào mà không cần copy lại theme.extend.
- * 2) Font chữ (Plus Jakarta Sans, Inter, JetBrains Mono) và icon
- *    "Material Symbols Outlined" cần được nạp trong <head> của ứng dụng
- *    (hoặc index.html). Component có kèm hook useEffect để tự chèn các thẻ
- *    <link> font này khi mount — bạn có thể xoá nếu đã tự cấu hình font
- *    trong dự án.
- * 3) Toàn bộ logic tương tác (accordion API key, hiệu ứng nút đăng nhập,
- *    nút khách) đã được chuyển từ <script> thuần sang useState/useEffect.
- */
-
 const FEATURES = [
   {
     icon: "dynamic_feed",
