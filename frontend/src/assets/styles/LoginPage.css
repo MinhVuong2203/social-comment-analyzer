@@ -1,0 +1,116 @@
+.login-page {
+    min-height: 100vh;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background:
+        linear-gradient(
+            135deg,
+            #f7f7f8,
+            #e9e9ec
+        );
+}
+
+
+.login-card {
+    width: 420px;
+
+    padding: 45px 40px;
+
+    background: white;
+
+    border-radius: 20px;
+
+    box-shadow:
+        0 15px 45px
+        rgba(0, 0, 0, 0.12);
+
+    text-align: center;
+}
+
+
+.logo {
+    width: 70px;
+    height: 70px;
+
+    margin: 0 auto 25px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 50%;
+
+    background: #000;
+
+    color: white;
+
+    font-size: 22px;
+    font-weight: bold;
+}
+
+
+.login-card h1 {
+    margin-bottom: 12px;
+
+    font-size: 27px;
+}
+
+
+.subtitle {
+    color: #666;
+
+    line-height: 1.6;
+
+    margin-bottom: 30px;
+}
+
+
+.threads-login-button {
+    width: 100%;
+
+    padding: 15px;
+
+    border: none;
+
+    border-radius: 12px;
+
+    background: #000;
+
+    color: white;
+
+    font-size: 16px;
+
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition: 0.2s;
+}
+
+
+.threads-login-button:hover {
+    background: #222;
+
+    transform: translateY(-1px);
+}
+
+
+.threads-icon {
+    margin-right: 8px;
+
+    font-size: 18px;
+}
+
+
+.login-note {
+    margin-top: 20px;
+
+    font-size: 13px;
+
+    color: #888;
+
+    line-height: 1.5;
+}

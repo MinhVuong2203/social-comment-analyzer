@@ -1,0 +1,220 @@
+.home-page {
+    min-height: 100vh;
+
+    background: #f5f5f7;
+}
+
+
+.navbar {
+    height: 70px;
+
+    padding: 0 40px;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    background: white;
+
+    border-bottom: 1px solid #e5e5e5;
+}
+
+
+.navbar-logo {
+    font-size: 20px;
+
+    font-weight: 700;
+}
+
+
+.navbar-user {
+    display: flex;
+
+    align-items: center;
+
+    gap: 18px;
+}
+
+
+.navbar-user button {
+    padding: 8px 16px;
+
+    border: 1px solid #ddd;
+
+    border-radius: 8px;
+
+    background: white;
+
+    cursor: pointer;
+}
+
+
+.home-content {
+    max-width: 1100px;
+
+    margin: 0 auto;
+
+    padding: 50px 30px;
+}
+
+
+.welcome {
+    margin-bottom: 30px;
+}
+
+
+.welcome h1 {
+    margin-bottom: 8px;
+
+    font-size: 32px;
+}
+
+
+.welcome p {
+    color: #666;
+}
+
+
+.user-card {
+    padding: 30px;
+
+    background: white;
+
+    border-radius: 16px;
+
+    box-shadow:
+        0 5px 20px
+        rgba(0, 0, 0, 0.06);
+}
+
+
+.profile-section {
+    display: flex;
+
+    align-items: center;
+
+    gap: 20px;
+
+    padding-bottom: 25px;
+
+    border-bottom: 1px solid #eee;
+}
+
+
+.profile-image,
+.profile-placeholder {
+    width: 80px;
+    height: 80px;
+
+    border-radius: 50%;
+}
+
+
+.profile-image {
+    object-fit: cover;
+}
+
+
+.profile-placeholder {
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    background: #111;
+
+    color: white;
+
+    font-size: 28px;
+
+    font-weight: bold;
+}
+
+
+.profile-section h2 {
+    margin: 0 0 6px;
+}
+
+
+.profile-section p {
+    margin: 0;
+
+    color: #777;
+}
+
+
+.user-info {
+    margin-top: 25px;
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(3, 1fr);
+
+    gap: 20px;
+}
+
+
+.info-item {
+    padding: 18px;
+
+    border-radius: 10px;
+
+    background: #f7f7f8;
+}
+
+
+.info-item span {
+    display: block;
+
+    margin-bottom: 8px;
+
+    font-size: 13px;
+
+    color: #777;
+}
+
+
+.info-item strong {
+    word-break: break-all;
+}
+
+
+.status {
+    color: #16803c;
+}
+
+
+.feature-grid {
+    margin-top: 30px;
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(3, 1fr);
+
+    gap: 20px;
+}
+
+
+.feature-card {
+    padding: 25px;
+
+    background: white;
+
+    border-radius: 14px;
+
+    border: 1px solid #eee;
+}
+
+
+.feature-card h3 {
+    margin-top: 0;
+}
+
+
+.feature-card p {
+    color: #666;
+
+    line-height: 1.6;
+}
