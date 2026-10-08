@@ -1,4 +1,4 @@
-const API_URL = "https://provider-egging-stratus.ngrok-free.dev";
+const API_URL = "https://unhitched-denim-slacker.ngrok-free.dev";
 // cần chỉnh
 
 export const loginWithThreads = () => {
