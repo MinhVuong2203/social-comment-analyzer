@@ -19,7 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Service
 public class ThreadsOAuthService {
 
-    @Value("${threads.thread-id}")
+    @Value("${threads.thread_app_id}")
     private String threadId;
 
     @Value("${threads.thread-secret}")
@@ -102,29 +102,90 @@ public class ThreadsOAuthService {
     /**
      * Lấy thông tin tài khoản Threads
      */
-    public JsonNode getMe(String accessToken) throws Exception {
+        public JsonNode getMe(String accessToken) throws Exception {
 
-        String url =
-                "https://graph.threads.net/me"
-                        + "?fields=id,username,name,threads_profile_picture_url"
-                        + "&access_token=" + encode(accessToken);
+                String url =
+                        "https://graph.threads.net/me"
+                                + "?fields=id,username,name,threads_profile_picture_url"
+                                + "&access_token=" + encode(accessToken);
 
-        ResponseEntity<String> response =
-                restTemplate.getForEntity(
-                        url,
-                        String.class
+                ResponseEntity<String> response =
+                        restTemplate.getForEntity(
+                                url,
+                                String.class
+                        );
+
+                System.out.println("ME RESPONSE:");
+                System.out.println(response.getBody());
+
+                return objectMapper.readTree(
+                        response.getBody()
                 );
+        }
 
-        System.out.println("ME RESPONSE:");
-        System.out.println(response.getBody());
+        private String encode(String value) {
+                return java.net.URLEncoder.encode(
+                        value,
+                        java.nio.charset.StandardCharsets.UTF_8
+                );
+        }
 
-        return objectMapper.readTree(response.getBody());
-    }
 
-    private String encode(String value) {
-        return java.net.URLEncoder.encode(
-                value,
-                java.nio.charset.StandardCharsets.UTF_8
-        );
-    }
+
+    /**
+     * Lấy danh sách bài viết của người dùng
+     */
+        public JsonNode getUserPosts(String accessToken) {
+
+                String url =
+                        "https://graph.threads.net/me/threads"
+                        + "?fields=id,username,text,media_type,permalink,timestamp"
+                        + "&access_token=" + accessToken;
+
+                String response =
+                        restTemplate.getForObject(
+                                url,
+                                String.class
+                        );
+
+                try {
+                        return objectMapper.readTree(response);
+                } catch (Exception e) {
+                        throw new RuntimeException(
+                                "Không thể parse Threads posts",
+                                e
+                        );
+                }
+        }
+
+        public JsonNode getPostReplies(
+                        String postId,
+                        String accessToken
+                ) {
+
+                String url =
+                        "https://graph.threads.net/"
+                        + postId
+                        + "/replies"
+                        + "?fields=id,username,text,timestamp"
+                        + "&access_token=" + accessToken;
+
+                String response =
+                        restTemplate.getForObject(
+                                url,
+                                String.class
+                        );
+
+                try {
+                        return objectMapper.readTree(response);
+                } catch (Exception e) {
+                        throw new RuntimeException(
+                                "Không thể parse Threads replies",
+                                e
+                        );
+                }
+        }
+
+        
+
 }

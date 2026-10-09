@@ -99,7 +99,7 @@ Web Admin cho phép quản trị viên:
 
 ### 1.4. Công nghệ chính
 
-| Thành phần         | Công nghệ                                  |
+| Thành phần       | Công nghệ                                |
 | ------------------ | ------------------------------------------ |
 | AI/ML              | Python, PyTorch, Hugging Face Transformers |
 | NLP                | PhoBERT                                    |
@@ -189,13 +189,13 @@ Một comment có thể được biểu diễn tối thiểu:
 }
 ```
 
-| Thuộc tính  | Ý nghĩa                                       |
-| ----------- | --------------------------------------------- |
-| `commentId` | ID duy nhất của bình luận                     |
-| `postId`    | ID bài viết chứa bình luận                    |
+| Thuộc tính  | Ý nghĩa                                            |
+| ------------- | ---------------------------------------------------- |
+| `commentId` | ID duy nhất của bình luận                        |
+| `postId`    | ID bài viết chứa bình luận                      |
 | `author`    | Người viết bình luận nếu Threads API cung cấp |
-| `text`      | Nội dung bình luận                            |
-| `createdAt` | Thời điểm tạo bình luận nếu API cung cấp      |
+| `text`      | Nội dung bình luận                                |
+| `createdAt` | Thời điểm tạo bình luận nếu API cung cấp     |
 
 ## 2.4. Quy trình xử lý
 
@@ -344,11 +344,11 @@ Hệ thống không nên gọi AI lại đối với comment đã có kết qu�
 
 Ví dụ:
 
-| Comment          | Toxicity  | Hate Speech | Sentiment |
-| ---------------- | --------- | ----------- | --------- |
+| Comment                | Toxicity  | Hate Speech | Sentiment |
+| ---------------------- | --------- | ----------- | --------- |
 | Cố lên bạn ơi ❤️ | Non-toxic | Non-hate    | Positive  |
-| Thật là tệ       | Toxic     | Non-hate    | Negative  |
-| Đúng là loại...  | Toxic     | Hate        | Negative  |
+| Thật là tệ          | Toxic     | Non-hate    | Negative  |
+| Đúng là loại...    | Toxic     | Hate        | Negative  |
 
 Ngoài label, hệ thống có thể lưu:
 
@@ -414,10 +414,10 @@ Chrome Extension phục vụ người dùng cuối, trong khi Web Admin phục v
 Web Admin cung cấp danh sách người dùng:
 
 | ID  | Username | Threads Account | Trạng thái | Ngày tham gia | Hoạt động gần nhất |
-| --- | -------- | --------------- | ---------- | ------------- | ------------------ |
-| 001 | user01   | @user01         | Active     | 01/10/2026    | 06/10/2026         |
-| 002 | user02   | @user02         | Active     | 02/10/2026    | 05/10/2026         |
-| 003 | user03   | @user03         | Blocked    | 03/10/2026    | 04/10/2026         |
+| --- | -------- | --------------- | ------------ | -------------- | ----------------------- |
+| 001 | user01   | @user01         | Active       | 01/10/2026     | 06/10/2026              |
+| 002 | user02   | @user02         | Active       | 02/10/2026     | 05/10/2026              |
+| 003 | user03   | @user03         | Blocked      | 03/10/2026     | 04/10/2026              |
 
 Admin có thể:
 
