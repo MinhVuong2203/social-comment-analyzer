@@ -1,4 +1,4 @@
-const API_URL = "https://nonruinously-glariest-kyler.ngrok-free.dev";
+const API_URL = "https://miss-pseudolegislative-mui.ngrok-free.dev";
 // cần chỉnh
 
 export const loginWithThreads = () => {
