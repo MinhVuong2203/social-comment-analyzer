@@ -87,7 +87,7 @@ Web Admin cho phép quản trị viên:
              │                 │                 │
              ▼                 ▼                 ▼
       ┌────────────┐    ┌────────────┐    ┌────────────┐
-      │ Threads API│    │ AI Service │    │   MySQL    │
+      │ Threads API│    │ AI Service │    │ PostgreSQL │
       │            │    │   Python   │    │            │
       └────────────┘    └─────┬──────┘    └────────────┘
                                │
@@ -99,7 +99,7 @@ Web Admin cho phép quản trị viên:
 
 ### 1.4. Công nghệ chính
 
-| Thành phần       | Công nghệ                                |
+| Thành phần         | Công nghệ                                  |
 | ------------------ | ------------------------------------------ |
 | AI/ML              | Python, PyTorch, Hugging Face Transformers |
 | NLP                | PhoBERT                                    |
@@ -107,7 +107,7 @@ Web Admin cho phép quản trị viên:
 | Backend            | Java Spring Boot                           |
 | Chrome Extension   | React                                      |
 | Web Admin          | React                                      |
-| Database           | MySQL                                      |
+| Database           | PostgreSQL                                 |
 | Social Network     | Threads                                    |
 | Browser            | Google Chrome                              |
 | Training           | Google Colab                               |
@@ -189,13 +189,13 @@ Một comment có thể được biểu diễn tối thiểu:
 }
 ```
 
-| Thuộc tính  | Ý nghĩa                                            |
-| ------------- | ---------------------------------------------------- |
-| `commentId` | ID duy nhất của bình luận                        |
-| `postId`    | ID bài viết chứa bình luận                      |
+| Thuộc tính  | Ý nghĩa                                       |
+| ----------- | --------------------------------------------- |
+| `commentId` | ID duy nhất của bình luận                     |
+| `postId`    | ID bài viết chứa bình luận                    |
 | `author`    | Người viết bình luận nếu Threads API cung cấp |
-| `text`      | Nội dung bình luận                                |
-| `createdAt` | Thời điểm tạo bình luận nếu API cung cấp     |
+| `text`      | Nội dung bình luận                            |
+| `createdAt` | Thời điểm tạo bình luận nếu API cung cấp      |
 
 ## 2.4. Quy trình xử lý
 
@@ -344,11 +344,11 @@ Hệ thống không nên gọi AI lại đối với comment đã có kết qu�
 
 Ví dụ:
 
-| Comment                | Toxicity  | Hate Speech | Sentiment |
-| ---------------------- | --------- | ----------- | --------- |
+| Comment          | Toxicity  | Hate Speech | Sentiment |
+| ---------------- | --------- | ----------- | --------- |
 | Cố lên bạn ơi ❤️ | Non-toxic | Non-hate    | Positive  |
-| Thật là tệ          | Toxic     | Non-hate    | Negative  |
-| Đúng là loại...    | Toxic     | Hate        | Negative  |
+| Thật là tệ       | Toxic     | Non-hate    | Negative  |
+| Đúng là loại...  | Toxic     | Hate        | Negative  |
 
 Ngoài label, hệ thống có thể lưu:
 
@@ -404,7 +404,7 @@ Ngoài phân tích bình luận, hệ thống có một **Web Admin** dành riê
               Spring Boot
                      │
                      ▼
-                   MySQL
+                 PostgreSQL
 ```
 
 Chrome Extension phục vụ người dùng cuối, trong khi Web Admin phục vụ quản trị viên.
@@ -414,10 +414,10 @@ Chrome Extension phục vụ người dùng cuối, trong khi Web Admin phục v
 Web Admin cung cấp danh sách người dùng:
 
 | ID  | Username | Threads Account | Trạng thái | Ngày tham gia | Hoạt động gần nhất |
-| --- | -------- | --------------- | ------------ | -------------- | ----------------------- |
-| 001 | user01   | @user01         | Active       | 01/10/2026     | 06/10/2026              |
-| 002 | user02   | @user02         | Active       | 02/10/2026     | 05/10/2026              |
-| 003 | user03   | @user03         | Blocked      | 03/10/2026     | 04/10/2026              |
+| --- | -------- | --------------- | ---------- | ------------- | ------------------ |
+| 001 | user01   | @user01         | Active     | 01/10/2026    | 06/10/2026         |
+| 002 | user02   | @user02         | Active     | 02/10/2026    | 05/10/2026         |
+| 003 | user03   | @user03         | Blocked    | 03/10/2026    | 04/10/2026         |
 
 Admin có thể:
 
@@ -535,7 +535,7 @@ Project tập trung vào:
              │                    │                    │
              ▼                    ▼                    ▼
       ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
-      │   Threads   │      │ AI Service  │      │    MySQL    │
+      │   Threads   │      │ AI Service  │      │ PostgreSQL  │
       │     API     │      │   Python    │      │  Database   │
       └─────────────┘      └──────┬──────┘      └─────────────┘
                                   │
@@ -636,7 +636,7 @@ Nghiên cứu
                     │                               │
                     ▼                               ▼
           ┌──────────────────┐             ┌──────────────────┐
-          │ Chrome Extension │             │   Web Admin / React │
+          │ Chrome Extension │             │Web Admin / React │
           │     React        │             │     React        │
           └────────┬─────────┘             └────────┬─────────┘
                    │                                │
@@ -650,8 +650,8 @@ Nghiên cứu
                     │             │             │
                     ▼             ▼             ▼
               ┌──────────┐  ┌──────────┐
-              │AI Service│  │ MySQL    |
-              |			 |  |		   |
+              │AI Service│  │PostgreSQL|
+              |			     |	|          |
               │ Python   │  │          │
               └────┬─────┘  └──────────┘
                    │
@@ -988,7 +988,7 @@ PhoBERT
 
 ## 9.1. Trách nhiệm
 
-Backend Spring Boot là tầng trung gian giữa Chrome Extension, Threads API, AI Service và MySQL.
+Backend Spring Boot là tầng trung gian giữa Chrome Extension, Threads API, AI Service và PostgreSQL.
 
 ```text
 Client
@@ -1196,7 +1196,7 @@ Không thiết kế production theo kiểu một access token dùng chung cho t�
 
 # 14. Database
 
-MySQL được sử dụng làm database chính của hệ thống web.
+PostgreSQL được sử dụng làm database chính của hệ thống web.
 
 Thiết kế cần phân biệt:
 
