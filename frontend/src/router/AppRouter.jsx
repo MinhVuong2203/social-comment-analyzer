@@ -6,6 +6,7 @@ import {
 } from "react-router-dom";
 
 import LoginPage from "../pages/LoginPage";
+import AdminLoginPage from "../pages/AdminLoginPage";
 import HomePage from "../pages/HomePage";
 
 import { useAuth } from "../context/AuthContext";
@@ -57,6 +58,20 @@ function AppRouter() {
                     element={<LoginPage />}
                 />
 
+                <Route
+                    path="/admin/login"
+                    element={<AdminLoginPage />}
+                />
+
+                <Route
+                    path="/admin"
+                    element={
+                        <Navigate
+                            to="/admin/login"
+                            replace
+                        />
+                    }
+                />
 
                 <Route
                     path="/"
