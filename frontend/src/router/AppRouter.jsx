@@ -8,6 +8,7 @@ import {
 import LoginPage from "../pages/LoginPage";
 import AdminLoginPage from "../pages/AdminLoginPage";
 import HomePage from "../pages/HomePage";
+import OverviewPage from "../pages/OverviewPage";
 
 import { useAuth } from "../context/AuthContext";
 
@@ -90,6 +91,15 @@ function AppRouter() {
                             to="/"
                             replace
                         />
+                    }
+                />
+
+                <Route
+                    path="/overview"
+                    element={
+                        <ProtectedRoute>
+                            <OverviewPage />
+                        </ProtectedRoute>
                     }
                 />
 
