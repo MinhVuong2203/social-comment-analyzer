@@ -1,0 +1,66 @@
+.tc-wrap {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+}
+
+/* Header */
+.tc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 8px;
+}
+.tc-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.tc-overall-badge { font-size: 10px; white-space: nowrap; }
+
+/* Level grid */
+.tc-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.tc-level-item {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 6px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tc-level-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+.tc-level-value {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* Hate speech row */
+.tc-hate-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.tc-hate-icon  { font-size: 12px; }
+.tc-hate-label { color: var(--text-secondary); flex: 1; min-width: 120px; }
+.tc-hate-non   { color: var(--positive); font-weight: 600; }
+.tc-hate-sep   { color: var(--text-muted); }
+.tc-hate-val   { color: var(--negative); font-weight: 600; }
+
+.tc-hate-bar { height: 4px; }
