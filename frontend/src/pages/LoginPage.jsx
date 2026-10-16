@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { loginWithThreads } from "../services/authService";
 
@@ -143,13 +144,22 @@ export default function LoginPage() {
 
                             <div className="absolute -inset-2 bg-gradient-to-r from-[#c0c1ff] via-[#4cd7f6] to-[#8083ff] rounded-[0.5rem] blur-lg opacity-40 group-hover:opacity-75 transition duration-500" />
 
-                            <div className="relative w-16 h-16 rounded-[0.5rem] bg-[#0c0e14] flex items-center justify-center p-1 shadow-xl">
-
+                            <div className="relative w-16 h-16 rounded-[0.5rem] bg-[#0c0e14] flex items-center justify-center p-1 shadow-xl overflow-hidden">
                                 <img
                                     alt="Brand Logo Social Comment Analyzer"
                                     className="w-full h-full object-contain rounded-[0.25rem] shadow-sm transform group-hover:scale-105 transition duration-300"
                                     src="https://lh3.googleusercontent.com/aida/AEtjO1Usa8OU1ik5dASEFdXhYxC7p28j2tR8NOk540gQ_dDp7ygWN4tOqPVdh4_chspeT8pcH5rXrznRTu5VGrt4WkSBJcdFRU3T9CT3q9ioML1TEBUg19BnXq7vXzzygiQDdSQfqFaUmBXRweFgL1nHarSrx0VlWEfnbgYCkyynKhPeGG4X7kx9o_QT1PRW5qcLY8NUOpWrOgWHDubTa9j83loWmP7VHv25027fd_edZx4q2yyopaWoDOWadlRq"
+                                    onError={(e) => {
+                                        e.currentTarget.style.display = "none";
+                                        const fallback = e.currentTarget.parentElement.querySelector(".logo-fallback");
+                                        if (fallback) fallback.style.display = "flex";
+                                    }}
                                 />
+                                <div className="logo-fallback hidden w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1e1f26] to-[#0c0e14] rounded-[0.25rem] text-[#c0c1ff]">
+                                    <span className="material-symbols-outlined text-[32px]">
+                                        query_stats
+                                    </span>
+                                </div>
                             </div>
 
                             <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#0c0e14] rounded-full flex items-center justify-center shadow">
@@ -189,72 +199,95 @@ export default function LoginPage() {
                         </p>
                     </section>
 
-                    {/* Threads OAuth Login */}
+                    {/* OAuth & Admin Login Section */}
                     <section className="flex flex-col mb-[0.625rem]">
 
-                        <button
-                            onClick={loginWithThreads}
-                            disabled={loading}
-                            className={`group relative w-full h-12 rounded-[0.25rem] bg-[#0c0e14] flex items-center justify-between px-[0.875rem] overflow-hidden shadow-lg transition-all duration-300 hover:bg-[#33343b] active:scale-[0.99] focus:outline-none ${
-                                loading
-                                    ? "opacity-80 pointer-events-none"
-                                    : ""
-                            }`}
-                        >
+                        <div className="grid grid-cols-2 gap-2">
+                            {/* Option 1: Threads OAuth Login */}
+                            <button
+                                onClick={loginWithThreads}
+                                disabled={loading}
+                                className={`group relative h-[52px] rounded-[0.25rem] bg-[#0c0e14] border border-[#282a30] hover:border-[#c0c1ff]/40 flex items-center justify-between px-[0.625rem] overflow-hidden shadow-lg transition-all duration-300 hover:bg-[#1e1f26] active:scale-[0.98] focus:outline-none ${
+                                    loading
+                                        ? "opacity-80 pointer-events-none"
+                                        : ""
+                                }`}
+                            >
+                                <div className="absolute inset-0 bg-gradient-to-r from-[#c0c1ff]/15 via-[#4cd7f6]/10 to-transparent opacity-60 group-hover:opacity-100 transition-opacity" />
 
-                            {/* Interactive Shimmer */}
-                            <div className="absolute inset-0 bg-gradient-to-r from-[#c0c1ff]/15 via-[#4cd7f6]/15 to-[#8083ff]/15 opacity-80 group-hover:opacity-100 transition-opacity" />
+                                <div className="relative flex items-center space-x-2 z-10 min-w-0">
+                                    <div className="w-7 h-7 rounded-full bg-[#e2e2eb] flex items-center justify-center shadow shrink-0">
+                                        <svg
+                                            className="w-4 h-4 fill-[#0c0e14]"
+                                            viewBox="0 0 192 192"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                        >
+                                            <path d="M141.537 88.9883C140.71 88.5919 139.87 88.2104 139.019 87.8451C137.537 60.5382 122.616 44.905 97.5619 44.745C97.4484 44.7443 97.3355 44.7443 97.222 44.7443C82.2364 44.7443 69.7731 51.1409 62.102 62.7807L75.3129 71.9723C80.9576 63.4072 89.9238 60.4206 97.2144 60.4206C97.2917 60.4206 97.3698 60.4206 97.4478 60.4213C108.435 60.4907 117.206 67.2403 120.301 80.9574C112.593 79.7997 104.382 79.5298 96.0645 80.2079C66.8625 82.5852 47.9009 98.4905 48.7845 120.941C49.5262 139.795 64.9818 152.483 83.9452 152.483C99.2319 152.483 111.458 144.385 118.528 132.827C124.088 143.927 133.684 150.016 148.163 150.016C163.666 150.016 174.978 140.354 178.694 123.633C182.261 107.579 178.475 90.0461 168.04 74.3409C152.395 50.7961 127.351 37.071 96.883 37.071C60.3361 37.071 31.854 60.2741 26.2447 94.6067C20.6702 128.718 39.5232 161.71 71.0772 173.064C76.9935 175.193 83.1813 176.326 89.4795 176.435V160.758C84.4449 160.671 79.4975 159.766 74.7709 158.065C49.9149 149.123 35.0643 123.13 39.4549 96.2505C43.8647 69.2486 66.294 51.0538 95.0744 51.0538C119.066 51.0538 138.781 61.8584 151.102 80.4079C159.324 92.7876 162.296 106.637 159.487 119.261C156.919 130.8 149.444 136.035 139.754 136.035C130.658 136.035 124.161 130.669 122.569 120.443C132.84 109.845 138.835 97.4526 141.537 88.9883ZM94.8877 137.608C82.5292 137.608 72.8436 129.805 72.3551 117.388C71.7455 101.895 86.1362 93.3039 104.664 91.7951C110.155 91.3481 115.545 91.5034 120.686 92.2359C117.848 122.428 106.657 137.608 94.8877 137.608Z" />
+                                        </svg>
+                                    </div>
 
-                            <div className="absolute top-0 left-[-100%] w-1/2 h-full bg-gradient-to-r from-transparent via-[#e1e0ff]/10 to-transparent skew-x-12 group-hover:left-[200%] transition-all duration-1000" />
+                                    <div className="flex flex-col text-left min-w-0">
+                                        <span className="font-['Plus_Jakarta_Sans'] text-[13px] leading-[17px] font-semibold text-[#e2e2eb] tracking-tight group-hover:text-[#c0c1ff] transition-colors truncate">
+                                            {loading
+                                                ? "Đang kết nối..."
+                                                : "Threads OAuth"}
+                                        </span>
 
-                            {/* Icon & Text */}
-                            <div className="relative flex items-center space-x-[0.625rem] z-10">
-
-                                <div className="w-7 h-7 rounded-full bg-[#e2e2eb] flex items-center justify-center shadow">
-
-                                    <svg
-                                        className="w-4 h-4 fill-[#0c0e14]"
-                                        viewBox="0 0 192 192"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <path d="M141.537 88.9883C140.71 88.5919 139.87 88.2104 139.019 87.8451C137.537 60.5382 122.616 44.905 97.5619 44.745C97.4484 44.7443 97.3355 44.7443 97.222 44.7443C82.2364 44.7443 69.7731 51.1409 62.102 62.7807L75.3129 71.9723C80.9576 63.4072 89.9238 60.4206 97.2144 60.4206C97.2917 60.4206 97.3698 60.4206 97.4478 60.4213C108.435 60.4907 117.206 67.2403 120.301 80.9574C112.593 79.7997 104.382 79.5298 96.0645 80.2079C66.8625 82.5852 47.9009 98.4905 48.7845 120.941C49.5262 139.795 64.9818 152.483 83.9452 152.483C99.2319 152.483 111.458 144.385 118.528 132.827C124.088 143.927 133.684 150.016 148.163 150.016C163.666 150.016 174.978 140.354 178.694 123.633C182.261 107.579 178.475 90.0461 168.04 74.3409C152.395 50.7961 127.351 37.071 96.883 37.071C60.3361 37.071 31.854 60.2741 26.2447 94.6067C20.6702 128.718 39.5232 161.71 71.0772 173.064C76.9935 175.193 83.1813 176.326 89.4795 176.435V160.758C84.4449 160.671 79.4975 159.766 74.7709 158.065C49.9149 149.123 35.0643 123.13 39.4549 96.2505C43.8647 69.2486 66.294 51.0538 95.0744 51.0538C119.066 51.0538 138.781 61.8584 151.102 80.4079C159.324 92.7876 162.296 106.637 159.487 119.261C156.919 130.8 149.444 136.035 139.754 136.035C130.658 136.035 124.161 130.669 122.569 120.443C132.84 109.845 138.835 97.4526 141.537 88.9883ZM94.8877 137.608C82.5292 137.608 72.8436 129.805 72.3551 117.388C71.7455 101.895 86.1362 93.3039 104.664 91.7951C110.155 91.3481 115.545 91.5034 120.686 92.2359C117.848 122.428 106.657 137.608 94.8877 137.608Z" />
-                                    </svg>
+                                        <span className="font-['JetBrains_Mono'] text-[9px] leading-[11px] tracking-[0.02em] text-[#908fa0] truncate">
+                                            Đăng nhập cá nhân
+                                        </span>
+                                    </div>
                                 </div>
 
-                                <div className="flex flex-col text-left">
-
-                                    <span className="font-['Plus_Jakarta_Sans'] text-[14px] leading-[18px] font-semibold text-[#e2e2eb] tracking-tight group-hover:text-[#c0c1ff] transition-colors">
-
-                                        {loading
-                                            ? "Đang kết nối Threads OAuth..."
-                                            : "Đăng nhập bằng Threads"}
-
-                                    </span>
-
-                                    <span className="font-['JetBrains_Mono'] text-[9px] leading-[10px] tracking-[0.04em] font-semibold text-[#c7c4d7]">
-                                        OAuth 2.0 cấp quyền đọc bảo mật
+                                <div className="relative z-10 w-6 h-6 rounded-full bg-[#1e1f26] flex items-center justify-center text-[#c0c1ff] shrink-0 group-hover:translate-x-0.5 group-hover:bg-[#c0c1ff] group-hover:text-[#1000a9] transition-all">
+                                    <span className="material-symbols-outlined text-[14px]">
+                                        arrow_forward
                                     </span>
                                 </div>
-                            </div>
+                            </button>
 
-                            {/* Arrow */}
-                            <div className="relative z-10 w-7 h-7 rounded-full bg-[#1e1f26] flex items-center justify-center text-[#c0c1ff] group-hover:translate-x-1 group-hover:bg-[#c0c1ff] group-hover:text-[#1000a9] transition-all">
+                            {/* Option 2: Admin Login */}
+                            <Link
+                                to="/admin/login"
+                                className="group relative h-[52px] rounded-[0.25rem] bg-[#0c0e14] border border-[#282a30] hover:border-[#c0c1ff]/40 flex items-center justify-between px-[0.625rem] overflow-hidden shadow-lg transition-all duration-300 hover:bg-[#1e1f26] active:scale-[0.98]"
+                            >
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#c0c1ff]/10 to-[#8083ff]/15 opacity-60 group-hover:opacity-100 transition-opacity" />
 
-                                <span className="material-symbols-outlined text-[16px]">
-                                    arrow_forward
-                                </span>
-                            </div>
-                        </button>
+                                <div className="relative flex items-center space-x-2 z-10 min-w-0">
+                                    <div className="w-7 h-7 rounded-full bg-[#c0c1ff] text-[#1000a9] flex items-center justify-center shadow shrink-0">
+                                        <span className="material-symbols-outlined text-[16px]">
+                                            person
+                                        </span>
+                                    </div>
+
+                                    <div className="flex flex-col text-left min-w-0">
+                                        <span className="font-['Plus_Jakarta_Sans'] text-[13px] leading-[17px] font-semibold text-[#e2e2eb] tracking-tight group-hover:text-[#c0c1ff] transition-colors truncate">
+                                            Quản trị viên
+                                        </span>
+
+                                        <span className="font-['JetBrains_Mono'] text-[9px] leading-[11px] tracking-[0.02em] text-[#908fa0] truncate">
+                                            Tài khoản Admin
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="relative z-10 w-6 h-6 rounded-full bg-[#1e1f26] flex items-center justify-center text-[#c0c1ff] shrink-0 group-hover:translate-x-0.5 group-hover:bg-[#c0c1ff] group-hover:text-[#1000a9] transition-all">
+                                    <span className="material-symbols-outlined text-[14px]">
+                                        arrow_forward
+                                    </span>
+                                </div>
+                            </Link>
+                        </div>
 
                         {/* Trust Notice */}
-                        <div className="flex items-center justify-center space-x-1.5 mt-[0.25rem] text-[#c7c4d7]/70 text-center">
+                        <div className="flex items-center justify-center space-x-1.5 mt-[0.375rem] text-[#c7c4d7]/70 text-center">
 
                             <span className="material-symbols-outlined text-[12px] text-[#4edea3]">
                                 lock
                             </span>
 
                             <span className="font-['JetBrains_Mono'] text-[9px] leading-[10px] tracking-[0.04em] font-semibold">
-                                Kết nối trực tiếp qua Threads OAuth API. Không bao giờ lưu mật khẩu.
+                                Kết nối bảo mật qua Threads OAuth API & Admin Workspace.
                             </span>
                         </div>
                     </section>

@@ -1,5 +1,4 @@
-const API_URL = "https://miss-pseudolegislative-mui.ngrok-free.dev";
-// cần chỉnh
+const API_URL = "https://unhitched-denim-slacker.ngrok-free.dev";
 
 export const loginWithThreads = () => {
     window.location.href =
