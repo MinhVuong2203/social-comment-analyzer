@@ -2,7 +2,8 @@ import {
     BrowserRouter,
     Routes,
     Route,
-    Navigate
+    Navigate,
+    Outlet
 } from "react-router-dom";
 
 import LoginPage from "../pages/LoginPage";
@@ -11,6 +12,9 @@ import HomePage from "../pages/HomePage";
 import OverviewPage from "../pages/OverviewPage";
 
 import { useAuth } from "../context/AuthContext";
+
+import CommentsPage from '../pages/CommentsPage'
+import Header from '../components/layout/Header'
 
 
 function ProtectedRoute({ children }) {
@@ -43,6 +47,18 @@ function ProtectedRoute({ children }) {
 
 
     return children;
+}
+
+// Layout chung: Header cố định + nội dung thay đổi bên dưới
+function AppLayout() {
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+            <Header />
+            <div style={{ flex: 1, overflow: 'auto' }}>
+                <Outlet />
+            </div>
+        </div>
+    );
 }
 
 
@@ -94,14 +110,15 @@ function AppRouter() {
                     }
                 />
 
-                <Route
-                    path="/overview"
-                    element={
-                        <ProtectedRoute>
-                            <OverviewPage />
-                        </ProtectedRoute>
-                    }
-                />
+                <Route element={
+                    <ProtectedRoute>
+                        <AppLayout />
+                    </ProtectedRoute>
+                }>
+                    <Route path="/overview" element={<OverviewPage />} />
+                    <Route path="/comments" element={<CommentsPage />} />
+                    
+                </Route>
 
             </Routes>
 
