@@ -1,6 +1,6 @@
 import { useState } from 'react';
+import CommentDetail from './CommentDetail';
 
-/* helpers */
 const SENTIMENT_META = {
   positive: { label: 'Tích cực',  color: '#10b981', className: 'pos' },
   neutral:  { label: 'Trung tính', color: '#6b7280', className: 'neu' },
@@ -16,14 +16,17 @@ function ToxBar({ value, color }) {
 }
 
 export default function ReplyCard({ reply }) {
-  const [collapsed, setCollapsed] = useState(reply.hidden);
+  const [collapsed,  setCollapsed]  = useState(reply.hidden);
+  const [showDetail, setShowDetail] = useState(false);
 
-  const sm   = SENTIMENT_META[reply.sentiment] ?? SENTIMENT_META.neutral;
-  const isHigh = reply.toxicityLevel === 'High' || reply.toxicity >= 60;
+  const sm          = SENTIMENT_META[reply.sentiment] ?? SENTIMENT_META.neutral;
+  const isHigh      = reply.toxicityLevel === 'High' || reply.toxicity >= 60;
   const isViolating = reply.violating;
-
-  /* border-left accent color */
   const borderColor = isViolating ? '#ef4444' : isHigh ? '#f97316' : 'transparent';
+
+  if (showDetail) {
+    return <CommentDetail reply={reply} onBack={() => setShowDetail(false)} />;
+  }
 
   return (
     <div
@@ -51,7 +54,6 @@ export default function ReplyCard({ reply }) {
         </div>
 
         <div className="rc-right">
-          {/* sentiment / toxicity badge */}
           {isViolating ? (
             <span className="rc-badge rc-badge--vio">🔴 Hate {reply.hate}%</span>
           ) : isHigh ? (
@@ -110,15 +112,21 @@ export default function ReplyCard({ reply }) {
             <span className="rc-foot-near">↩Gần cã</span>
           )}
         </span>
-        {isViolating && (
+
+        {isViolating ? (
           <div className="rc-action-row">
             <button className="rc-show-btn" onClick={() => setCollapsed(c => !c)}>
               👁 {collapsed ? 'Hiện' : 'Ẩn'} reply
             </button>
-            <button className="rc-detail-btn">Chi tiết ›</button>
+            <button className="rc-detail-btn" onClick={() => setShowDetail(true)}>
+              Chi tiết ›
+            </button>
           </div>
+        ) : (
+          <button className="rc-detail-btn" onClick={() => setShowDetail(true)}>
+            Chi tiết ›
+          </button>
         )}
-        {!isViolating && <button className="rc-detail-btn">Chi tiết ›</button>}
       </div>
     </div>
   );

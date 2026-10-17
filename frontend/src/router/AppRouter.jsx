@@ -35,15 +35,15 @@ function ProtectedRoute({ children }) {
     }
 
 
-    if (!user) {
+    // if (!user) {
 
-        return (
-            <Navigate
-                to="/login"
-                replace
-            />
-        );
-    }
+    //     return (
+    //         <Navigate
+    //             to="/login"
+    //             replace
+    //         />
+    //     );
+    // }
 
 
     return children;
