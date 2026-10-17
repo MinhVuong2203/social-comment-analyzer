@@ -15,6 +15,7 @@ import { useAuth } from "../context/AuthContext";
 
 import CommentsPage from '../pages/CommentsPage'
 import Header from '../components/layout/Header'
+import StatisticsPage from '../pages/StatisticsPage'
 
 
 function ProtectedRoute({ children }) {
@@ -35,15 +36,15 @@ function ProtectedRoute({ children }) {
     }
 
 
-    // if (!user) {
+    if (!user) {
 
-    //     return (
-    //         <Navigate
-    //             to="/login"
-    //             replace
-    //         />
-    //     );
-    // }
+        return (
+            <Navigate
+                to="/login"
+                replace
+            />
+        );
+    }
 
 
     return children;
@@ -117,6 +118,7 @@ function AppRouter() {
                 }>
                     <Route path="/overview" element={<OverviewPage />} />
                     <Route path="/comments" element={<CommentsPage />} />
+                    <Route path="/statistics" element={<StatisticsPage />} />
                     
                 </Route>
 
