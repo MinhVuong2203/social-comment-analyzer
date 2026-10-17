@@ -1,37 +1,40 @@
 import { useState, useMemo } from 'react';
 import { mockReplies } from '../utils/mockData';
 import ReplyCard from '../components/comments/ReplyCard';
-import '../assets/styles/TabBinhLuan.css';
+import '../assets/styles/Comment.css';
 
 const FILTERS = [
-  { id: 'all', label: 'Tất cả', count: 184 },
-  { id: 'positive', label: 'Tích cực', count: 78 },
-  { id: 'neutral', label: 'Trung tính', count: 70 },
-  { id: 'negative', label: 'Tiêu cực', count: 36 },
+  { id: 'all',      label: 'All',      count: 184 },
+  { id: 'positive', label: 'Positive', count: 78  },
+  { id: 'neutral',  label: 'Neutral',  count: 70  },
+  { id: 'negative', label: 'Negative', count: 36  },
 ];
 
-const SORT_OPTIONS = ['Mới nhất', 'Toxic cao', 'Tích cực', 'Tiêu cực'];
+const SORT_OPTIONS = ['Newest', 'Most Toxic', 'Positive', 'Negative'];
 
-export default function CommentsTab({ onSwitchTab }) {
-  const [search, setSearch] = useState('');
-  const [activeFilter, setFilter] = useState('all');
-  const [sort, setSort] = useState('Mới nhất');
-  const [showSortMenu, setShowSort] = useState(false);
-  const [showNewBanner, setShowNew] = useState(true);
+export default function CommentsPage() {
+  const [search,         setSearch]   = useState('');
+  const [activeFilter,   setFilter]   = useState('all');
+  const [sort,           setSort]     = useState('Newest');
+  const [showSortMenu,   setShowSort] = useState(false);
+  const [showNewBanner,  setShowNew]  = useState(true);
 
   const filtered = useMemo(() => {
     let list = [...mockReplies];
-    if (activeFilter !== 'all') list = list.filter(r => r.sentiment === activeFilter);
-    if (search.trim()) list = list.filter(r =>
-      r.content.toLowerCase().includes(search.toLowerCase()) ||
-      r.username.toLowerCase().includes(search.toLowerCase())
-    );
+    if (activeFilter !== 'all')
+      list = list.filter(r => r.sentiment === activeFilter);
+    if (search.trim())
+      list = list.filter(r =>
+        r.content.toLowerCase().includes(search.toLowerCase()) ||
+        r.username.toLowerCase().includes(search.toLowerCase())
+      );
     return list;
   }, [activeFilter, search]);
 
   return (
     <div className="ct-wrap">
-      {/* ── Header row ─────────────────────────── */}
+
+      {/* Header */}
       <div className="ct-header">
         <div className="ct-title-row">
           <h2 className="ct-title">
@@ -39,16 +42,16 @@ export default function CommentsTab({ onSwitchTab }) {
           </h2>
           <span className="ct-model-badge">● PhoBERT v2.1</span>
         </div>
-        <p className="ct-subtitle">184 replies đã phân tích bằng mô hình PhoBERT đa tầng</p>
+        <p className="ct-subtitle">184 replies analyzed by multi-layer PhoBERT model</p>
       </div>
 
-      {/* ── Search ─────────────────────────────── */}
+      {/* Search */}
       <div className="ct-search-row">
         <div className="ct-search-wrap">
           <span className="ct-search-icon">🔍</span>
           <input
             className="ct-search"
-            placeholder="Tìm kiếm theo từ khoá, @username..."
+            placeholder="Search by keyword, @username..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -56,9 +59,9 @@ export default function CommentsTab({ onSwitchTab }) {
         <span className="ct-search-tag">1K</span>
       </div>
 
-      {/* ── Filter bar ─────────────────────────── */}
+      {/* Filter bar */}
       <div className="ct-filter-bar">
-        <span className="ct-filter-label">BỘ LỌC NGỮ NGHĨA</span>
+        <span className="ct-filter-label">SEMANTIC FILTER</span>
         <div className="ct-sort-wrap" onClick={() => setShowSort(s => !s)}>
           <span className="ct-sort-btn">↕ {sort}</span>
           {showSortMenu && (
@@ -77,7 +80,7 @@ export default function CommentsTab({ onSwitchTab }) {
         </div>
       </div>
 
-      {/* ── Sentiment chips ─────────────────────── */}
+      {/* Chips */}
       <div className="ct-chips">
         {FILTERS.map(f => (
           <button
@@ -91,29 +94,30 @@ export default function CommentsTab({ onSwitchTab }) {
         ))}
       </div>
 
-      {/* ── Reply list ──────────────────────────── */}
+      {/* Reply list */}
       <div className="ct-list">
         {filtered.map(reply => (
           <ReplyCard key={reply.id} reply={reply} />
         ))}
       </div>
 
-      {/* ── New replies notification banner ──── */}
+      {/* New banner */}
       {showNewBanner && (
         <div className="ct-new-banner">
           <span className="ct-new-dot" />
-          <span className="ct-new-text">Đã phát hiện 24 replies mới</span>
-          <button className="ct-analyze-btn">⚡ Phân tích ngay</button>
+          <span className="ct-new-text">Detected <strong>24 new replies</strong></span>
+          <button className="ct-analyze-btn">⚡ Analyze now</button>
           <button className="ct-close-btn" onClick={() => setShowNew(false)}>✕</button>
         </div>
       )}
 
-      {/* ── Stats row at bottom ─────────────── */}
+      {/* Stats */}
       <div className="ct-stats-row">
-        <span className="ct-stat ct-stat--pos">●  424 Tích cực</span>
-        <span className="ct-stat ct-stat--neu">● 334 Trung tính</span>
+        <span className="ct-stat ct-stat--pos">● 424 Positive</span>
+        <span className="ct-stat ct-stat--neu">● 334 Neutral</span>
         <span className="ct-stat ct-stat--neg">● 123 Toxic</span>
       </div>
+
     </div>
   );
 }
