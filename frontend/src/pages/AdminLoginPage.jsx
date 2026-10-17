@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { loginAdmin } from "../services/adminAuthService";
 
 export default function AdminLoginPage() {
     const navigate = useNavigate();
@@ -29,27 +30,15 @@ export default function AdminLoginPage() {
         setIsLoading(true);
 
         try {
-            // TODO: Kết nối với API đăng nhập Admin thật sự từ backend (VD: /api/admin/login)
-            // Mô phỏng xác thực admin
-            await new Promise((resolve) => setTimeout(resolve, 800));
+            const adminData = await loginAdmin(username.trim(), password);
 
-            // Demo logic xác thực tạm thời hoặc mock
-            if (
-                (username === "admin" || username === "admin@social.local") &&
-                password === "admin123"
-            ) {
-                // Lưu session / token nếu cần
-                sessionStorage.setItem("admin_auth", JSON.stringify({
-                    username: "admin",
-                    role: "SUPER_ADMIN",
-                    loggedInAt: new Date().toISOString()
-                }));
-                navigate("/");
-            } else {
-                setErrorMessage("Tài khoản hoặc mật khẩu quản trị không chính xác.");
-            }
+            // Lưu thông tin admin vào storage
+            const storage = rememberMe ? localStorage : sessionStorage;
+            storage.setItem("admin_auth", JSON.stringify(adminData));
+
+            navigate("/");
         } catch (err) {
-            setErrorMessage("Có lỗi xảy ra trong quá trình đăng nhập. Vui lòng thử lại.");
+            setErrorMessage(err.message || "Tài khoản hoặc mật khẩu quản trị không chính xác.");
         } finally {
             setIsLoading(false);
         }
@@ -88,8 +77,8 @@ export default function AdminLoginPage() {
                     <h1 className="font-['Plus_Jakarta_Sans'] text-xl font-bold tracking-tight text-[#f1f1f6]">
                         Đăng nhập Quản trị viên
                     </h1>
-                    <p className="text-xs text-[#908fa0] mt-1.5 leading-relaxed">
-                        Hệ thống điều hành Social Comment Analyzer & Quản trị AI
+                    <p className="text-xs text-[#908fa0] mt-1.5 leading-relaxed max-w-[320px] mx-auto">
+                        Hệ thống điều hành Social Comment Analyzer<br />& Quản trị AI
                     </p>
                 </div>
 
