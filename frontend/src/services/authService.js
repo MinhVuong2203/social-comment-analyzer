@@ -1,8 +1,16 @@
-const API_URL = "https://unhitched-denim-slacker.ngrok-free.dev";
+const API_URL = "https://miss-pseudolegislative-mui.ngrok-free.dev";
 
 export const loginWithThreads = () => {
-    window.location.href =
-        `${API_URL}/auth/threads`;
+    // window.location.href =
+    //     `${API_URL}/auth/threads`;
+    // Extension: mở tab mới thay vì redirect trong popup
+    if (typeof chrome !== 'undefined' && chrome.tabs) {
+        chrome.tabs.create({ url: `${API_URL}/auth/threads` });
+    } else {
+        // Local dev: redirect bình thường
+        window.location.href = `${API_URL}/auth/threads`;
+    }
+
 };
 
 

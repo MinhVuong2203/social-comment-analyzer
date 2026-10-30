@@ -4,11 +4,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import './Header.css';
 
 const TABS = [
-  { id: 'overview',   label: 'Overview',    path: '/overview' },
-  { id: 'comments',   label: 'Comments',    path: '/comments' },
+  { id: 'overview',   label: 'Tổng quan',    path: '/overview' },
+  { id: 'comments',   label: 'Bình luận',    path: '/comments' },
   { id: 'ai-analysis',label: 'AI Analysis', path: '/ai-analysis' },
-  { id: 'statistics', label: 'Statistics',  path: '/statistics' },
-  { id: 'settings',   label: 'Settings',    path: '/settings' },
+  { id: 'statistics', label: 'Thống kê',  path: '/statistics' },
+  { id: 'settings',   label: 'Cài đặt',    path: '/settings' },
 ];
 
 export default function Header() {
