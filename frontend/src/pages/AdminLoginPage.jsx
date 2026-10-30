@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { loginAdmin } from "../services/adminAuthService";
 
 export default function AdminLoginPage() {
     const navigate = useNavigate();
@@ -46,6 +47,15 @@ export default function AdminLoginPage() {
             }
         } catch (err) {
             setErrorMessage("Có lỗi xảy ra trong quá trình đăng nhập.");
+            const adminData = await loginAdmin(username.trim(), password);
+
+            // Lưu thông tin admin vào storage
+            const storage = rememberMe ? localStorage : sessionStorage;
+            storage.setItem("admin_auth", JSON.stringify(adminData));
+
+            navigate("/");
+        } catch (err) {
+            setErrorMessage(err.message || "Tài khoản hoặc mật khẩu quản trị không chính xác.");
         } finally {
             setIsLoading(false);
         }
@@ -82,6 +92,8 @@ export default function AdminLoginPage() {
                     </h1>
                     <p className="text-[11px] text-[#94a3b8] mt-0.5">
                         Social Comment Analyzer Control Center
+                    <p className="text-xs text-[#908fa0] mt-1.5 leading-relaxed max-w-[320px] mx-auto">
+                        Hệ thống điều hành Social Comment Analyzer<br />& Quản trị AI
                     </p>
                 </div>
 
