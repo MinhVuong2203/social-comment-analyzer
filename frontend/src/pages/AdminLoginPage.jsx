@@ -30,30 +30,29 @@ export default function AdminLoginPage() {
         setIsLoading(true);
 
         try {
-            await new Promise((resolve) => setTimeout(resolve, 600));
-
-            if (
-                (username === "admin" || username === "admin@social.local") &&
-                password === "admin123"
-            ) {
-                sessionStorage.setItem("admin_auth", JSON.stringify({
-                    username: "admin",
-                    role: "SUPER_ADMIN",
-                    loggedInAt: new Date().toISOString()
-                }));
+            // Thử gọi API đăng nhập backend thật sự
+            try {
+                const adminData = await loginAdmin(username.trim(), password);
+                const storage = rememberMe ? localStorage : sessionStorage;
+                storage.setItem("admin_auth", JSON.stringify(adminData));
                 navigate("/admin/dashboard");
-            } else {
-                setErrorMessage("Tài khoản hoặc mật khẩu không đúng.");
+                return;
+            } catch (apiErr) {
+                // Hỗ trợ bypass demo nếu backend chưa bật hoặc chưa có user
+                if (
+                    (username === "admin" || username === "admin@social.local") &&
+                    password === "admin123"
+                ) {
+                    sessionStorage.setItem("admin_auth", JSON.stringify({
+                        username: "admin",
+                        role: "SUPER_ADMIN",
+                        loggedInAt: new Date().toISOString()
+                    }));
+                    navigate("/admin/dashboard");
+                    return;
+                }
+                throw apiErr;
             }
-        } catch (err) {
-            setErrorMessage("Có lỗi xảy ra trong quá trình đăng nhập.");
-            const adminData = await loginAdmin(username.trim(), password);
-
-            // Lưu thông tin admin vào storage
-            const storage = rememberMe ? localStorage : sessionStorage;
-            storage.setItem("admin_auth", JSON.stringify(adminData));
-
-            navigate("/");
         } catch (err) {
             setErrorMessage(err.message || "Tài khoản hoặc mật khẩu quản trị không chính xác.");
         } finally {
@@ -92,8 +91,6 @@ export default function AdminLoginPage() {
                     </h1>
                     <p className="text-[11px] text-[#94a3b8] mt-0.5">
                         Social Comment Analyzer Control Center
-                    <p className="text-xs text-[#908fa0] mt-1.5 leading-relaxed max-w-[320px] mx-auto">
-                        Hệ thống điều hành Social Comment Analyzer<br />& Quản trị AI
                     </p>
                 </div>
 
