@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { loginWithThreads } from "../services/authService";
 
@@ -51,11 +51,20 @@ const FEATURES = [
 ];
 
 export default function LoginPage() {
-    const { loading } = useAuth();
+    // const { loading } = useAuth();
+    const { user, loading, setUser } = useAuth();
+    const navigate = useNavigate();
 
     const [apiKeyOpen, setApiKeyOpen] = useState(false);
     const [apiKeyValue, setApiKeyValue] = useState("");
     const [guestClicked, setGuestClicked] = useState(false);
+
+    // Nếu đã đăng nhập rồi thì tự redirect về overview
+    useEffect(() => {
+        if (!loading && user) {
+            navigate('/overview', { replace: true });
+        }
+    }, [user, loading, navigate]);
 
     // Nạp Material Symbols một lần khi component mount.
     useEffect(() => {
