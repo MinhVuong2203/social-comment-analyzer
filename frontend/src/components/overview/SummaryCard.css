@@ -1,0 +1,78 @@
+.sc-wrap {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+}
+
+.sc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.sc-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.sc-done-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+}
+.sc-done-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--positive);
+}
+
+/* Metrics */
+.sc-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.sc-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.sc-metric-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.sc-metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  line-height: 1;
+}
+.sc-metric-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.sc-cyan { color: var(--accent-cyan) !important; }
+
+/* Progress */
+.sc-progress-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+.sc-progress-count {
+  color: var(--text-secondary);
+  font-weight: 500;
+}

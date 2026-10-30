@@ -1,86 +1,69 @@
 import {
-    BrowserRouter,
+    HashRouter,
     Routes,
     Route,
-    Navigate
+    Navigate,
+    Outlet
 } from "react-router-dom";
 
 import LoginPage from "../pages/LoginPage";
-import HomePage from "../pages/HomePage";
-
+import AdminLoginPage from "../pages/AdminLoginPage";
+import OverviewPage from "../pages/OverviewPage";
+import CommentsPage from '../pages/CommentsPage';
+import StatisticsPage from '../pages/StatisticsPage';
+import Header from '../components/layout/Header';
 import { useAuth } from "../context/AuthContext";
 
-
 function ProtectedRoute({ children }) {
+    const { user, loading } = useAuth();
 
-    const {
-        user,
-        loading
-    } = useAuth();
-
-
-    if (loading) {
-
-        return (
-            <div>
-                Đang kiểm tra đăng nhập...
-            </div>
-        );
-    }
-
-
-    if (!user) {
-
-        return (
-            <Navigate
-                to="/login"
-                replace
-            />
-        );
-    }
-
+    if (loading) return <div style={{ color: '#94a3b8', padding: 20 }}>Loading...</div>;
+    // if (!user) return <Navigate to="/login" replace />;
 
     return children;
 }
 
+function AppLayout() {
+    return (
+        <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            overflow: 'hidden',
+        }}>
+            <Header />
+            <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+                <Outlet />
+            </div>
+        </div>
+    );
+}
 
 function AppRouter() {
-
     return (
-
-        <BrowserRouter>
-
+        <HashRouter>
             <Routes>
 
-                <Route
-                    path="/login"
-                    element={<LoginPage />}
-                />
+                {/* Public */}
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/admin/login" element={<AdminLoginPage />} />
+                <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
 
-
-                <Route
-                    path="/"
-                    element={
-                        <ProtectedRoute>
-                            <HomePage />
-                        </ProtectedRoute>
-                    }
-                />
-
-
-                <Route
-                    path="*"
-                    element={
-                        <Navigate
-                            to="/"
-                            replace
-                        />
-                    }
-                />
+                {/* Protected */}
+                <Route element={
+                    <ProtectedRoute>
+                        <AppLayout />
+                    </ProtectedRoute>
+                }>
+                    <Route path="/" element={<Navigate to="/overview" replace />} />
+                    <Route path="/overview" element={<OverviewPage />} />
+                    <Route path="/comments" element={<CommentsPage />} />
+                    <Route path="/statistics" element={<StatisticsPage />} />
+                    <Route path="*" element={<Navigate to="/overview" replace />} />
+                </Route>
 
             </Routes>
-
-        </BrowserRouter>
+        </HashRouter>
     );
 }
 

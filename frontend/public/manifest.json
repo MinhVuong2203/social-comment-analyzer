@@ -6,5 +6,8 @@
     "default_popup": "index.html",
     "default_title": "Mở bảng phân tích"
   },
-  "permissions": ["activeTab", "scripting"]
+  "permissions": ["activeTab", "scripting", "tabs", "cookies"],
+  "host_permissions": [
+    "https://miss-pseudolegislative-mui.ngrok-free.dev/*"
+  ]
 }

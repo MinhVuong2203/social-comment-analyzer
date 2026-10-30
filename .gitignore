@@ -2,4 +2,6 @@ ai-service/.venv/
 **/application.properties
 # Model AI được tải
 ai-service/phoBERT_models/
+ai-service/models/
 ai-service/app/__pycache__/
+
