@@ -8,7 +8,6 @@ import {
 
 import LoginPage from "../pages/LoginPage";
 import AdminLoginPage from "../pages/AdminLoginPage";
-import AdminDashboardPage from "../pages/AdminDashboardPage";
 import OverviewPage from "../pages/OverviewPage";
 import CommentsPage from '../pages/CommentsPage';
 import StatisticsPage from '../pages/StatisticsPage';
@@ -45,13 +44,12 @@ function AppRouter() {
         <HashRouter>
             <Routes>
 
-                {/* Public & Admin routes */}
+                {/* Public */}
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/admin/login" element={<AdminLoginPage />} />
-                <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
-                <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+                <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
 
-                {/* Protected User App */}
+                {/* Protected */}
                 <Route element={
                     <ProtectedRoute>
                         <AppLayout />
