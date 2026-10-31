@@ -5,3 +5,5 @@ ai-service/phoBERT_models/
 ai-service/models/
 ai-service/app/__pycache__/
 
+# Frontend
+frontend/.env
