@@ -1,6 +1,7 @@
-import React from 'react';
-import { Settings, Minus, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { Settings, Minus, X, LogOut } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import './Header.css';
 
 const TABS = [
@@ -14,6 +15,20 @@ const TABS = [
 export default function Header() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, logout } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      await logout();
+      navigate('/login', { replace: true });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   return (
     <div className="header-container">
@@ -26,17 +41,45 @@ export default function Header() {
             <span className="app-subtitle">AI-powered Threads analysis</span>
           </div>
         </div>
-        <div className="window-controls">
-          <Settings size={14} className="control-icon" />
-          <Minus    size={14} className="control-icon" />
-          <X        size={14} className="control-icon" />
+
+        <div className="header-top-right">
+          <button
+            type="button"
+            className="btn-logout"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            title="Đăng xuất khỏi tài khoản"
+          >
+            <LogOut size={13} className="logout-icon" />
+            <span>{isLoggingOut ? 'Đang thoát...' : 'Đăng xuất'}</span>
+          </button>
+
+          <div className="window-controls">
+            <Settings
+              size={14}
+              className="control-icon"
+              title="Cài đặt"
+              onClick={() => navigate('/settings')}
+            />
+            <Minus size={14} className="control-icon" title="Thu nhỏ" />
+            <X
+              size={14}
+              className="control-icon"
+              title="Đóng"
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.close) {
+                  window.close();
+                }
+              }}
+            />
+          </div>
         </div>
       </div>
 
       <div className="header-status">
-        <div className="status-badge">
+        <div className="status-badge" title={user?.name ? `${user.name} (@${user.username})` : undefined}>
           <span className="status-dot" />
-          Connected to Threads
+          {user?.username ? `@${user.username}` : (user?.name || 'Connected to Threads')}
         </div>
         <div className="status-version">V2.1.4 PRO</div>
       </div>
