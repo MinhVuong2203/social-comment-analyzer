@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { loginWithThreads } from "../services/authService";
 
@@ -54,10 +54,74 @@ export default function LoginPage() {
     // const { loading } = useAuth();
     const { user, loading, setUser } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
 
     const [apiKeyOpen, setApiKeyOpen] = useState(false);
     const [apiKeyValue, setApiKeyValue] = useState("");
     const [guestClicked, setGuestClicked] = useState(false);
+    const [blockedInfo, setBlockedInfo] = useState(null);
+
+    // Bắt tham số báo lỗi khóa tài khoản từ OAuth callback hoặc redirect
+    useEffect(() => {
+        const parseParams = () => {
+            if (location.state && location.state.blocked) {
+                setBlockedInfo({
+                    until: location.state.until || null,
+                    reason: location.state.reason || null,
+                });
+                return;
+            }
+
+            let search = location.search;
+            if (!search && window.location.hash.includes("?")) {
+                search = "?" + window.location.hash.split("?")[1];
+            }
+            if (!search) {
+                search = window.location.search;
+            }
+            const params = new URLSearchParams(search);
+            const error = params.get("error");
+            if (error === "account_blocked") {
+                const until = params.get("until");
+                const reason = params.get("reason");
+                setBlockedInfo({
+                    until: until || null,
+                    reason: reason || null,
+                });
+            }
+        };
+        parseParams();
+    }, [location]);
+
+    const formatLockUntil = (dateStr) => {
+        if (!dateStr) return "Cho đến khi Quản trị viên mở lại";
+        try {
+            const d = new Date(dateStr);
+            const now = new Date();
+            const diffMs = d - now;
+            let remainingText = "";
+            if (diffMs > 0) {
+                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                const diffDays = Math.floor(diffHours / 24);
+                if (diffDays > 0) {
+                    remainingText = ` (còn ${diffDays} ngày)`;
+                } else if (diffHours > 0) {
+                    remainingText = ` (còn ${diffHours} giờ)`;
+                } else {
+                    remainingText = ` (sắp hết hạn)`;
+                }
+            }
+            return d.toLocaleString("vi-VN", {
+                hour: "2-digit",
+                minute: "2-digit",
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric"
+            }) + remainingText;
+        } catch {
+            return dateStr;
+        }
+    };
 
     // Nếu đã đăng nhập rồi thì tự redirect về overview
     useEffect(() => {
@@ -207,6 +271,58 @@ export default function LoginPage() {
                             tối ưu cho mạng xã hội Threads.
                         </p>
                     </section>
+
+                    {/* Thông báo tài khoản bị khóa */}
+                    {blockedInfo && (
+                        <div className="mb-[0.625rem] p-3 rounded-[0.375rem] bg-[#3a0d12]/90 border border-[#ffb4ab]/50 shadow-xl text-[#f1f1f6] animate-fadeIn">
+                            <div className="flex items-start space-x-2.5">
+                                <div className="w-7 h-7 rounded-full bg-[#93000a] text-[#ffb4ab] flex items-center justify-center shrink-0 mt-0.5 shadow">
+                                    <span className="material-symbols-outlined text-[16px]">
+                                        gpp_bad
+                                    </span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="font-['Plus_Jakarta_Sans'] text-xs font-bold text-[#ffb4ab]">
+                                            Tài khoản của bạn đã bị khóa
+                                        </h3>
+                                        <button
+                                            onClick={() => setBlockedInfo(null)}
+                                            className="text-[#ffb4ab]/70 hover:text-white p-0.5 transition"
+                                            title="Đóng thông báo"
+                                        >
+                                            <span className="material-symbols-outlined text-[14px]">
+                                                close
+                                            </span>
+                                        </button>
+                                    </div>
+                                    <p className="text-[11px] text-[#e2e2eb] mt-1 leading-snug">
+                                        Quyền truy cập hệ thống đã bị tạm dừng bởi Quản trị viên.
+                                    </p>
+                                    <div className="mt-2 pt-2 border-t border-[#ffb4ab]/20 space-y-1 text-[10px] font-['JetBrains_Mono']">
+                                        <div className="flex items-center space-x-1.5 text-[#ffb4ab]">
+                                            <span className="material-symbols-outlined text-[13px]">
+                                                schedule
+                                            </span>
+                                            <span>
+                                                Thời hạn: <strong className="text-white">{formatLockUntil(blockedInfo.until)}</strong>
+                                            </span>
+                                        </div>
+                                        {blockedInfo.reason && (
+                                            <div className="flex items-start space-x-1.5 text-[#ffb4ab]/90">
+                                                <span className="material-symbols-outlined text-[13px] shrink-0 mt-0.5">
+                                                    info
+                                                </span>
+                                                <span className="truncate">
+                                                    Lý do: <span className="text-[#e2e2eb] italic">{blockedInfo.reason}</span>
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* OAuth & Admin Login Section */}
                     <section className="flex flex-col mb-[0.625rem]">
