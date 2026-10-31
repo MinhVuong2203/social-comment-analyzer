@@ -31,9 +31,12 @@ public class AdminAuthController {
         try {
             AdminResponse adminResponse = adminAuthService.login(request);
 
-            // Lưu thông tin admin vào session
+            // Lưu thông tin admin vào session (hỗ trợ cả 2 chuẩn session key)
             HttpSession session = httpRequest.getSession(true);
             session.setAttribute(ADMIN_SESSION_KEY, adminResponse);
+            session.setAttribute("admin_logged_in", true);
+            session.setAttribute("admin_username", adminResponse.getUsername());
+            session.setAttribute("admin_role", adminResponse.getRole());
 
             return ResponseEntity.ok(adminResponse);
         } catch (IllegalArgumentException e) {
@@ -58,8 +61,17 @@ public class AdminAuthController {
 
         AdminResponse admin = (AdminResponse) session.getAttribute(ADMIN_SESSION_KEY);
         if (admin == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Collections.singletonMap("message", "Chưa đăng nhập quản trị viên."));
+            // Kiểm tra fallback admin_username
+            String username = (String) session.getAttribute("admin_username");
+            if (username != null) {
+                admin = AdminResponse.builder()
+                        .username(username)
+                        .role((String) session.getAttribute("admin_role"))
+                        .build();
+            } else {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Collections.singletonMap("message", "Chưa đăng nhập quản trị viên."));
+            }
         }
 
         return ResponseEntity.ok(admin);
@@ -70,10 +82,11 @@ public class AdminAuthController {
         HttpSession session = httpRequest.getSession(false);
         if (session != null) {
             session.removeAttribute(ADMIN_SESSION_KEY);
-            // Có thể invalidate session nếu không chia sẻ với user thường
+            session.removeAttribute("admin_logged_in");
+            session.removeAttribute("admin_username");
+            session.removeAttribute("admin_role");
             session.invalidate();
         }
         return ResponseEntity.ok(Collections.singletonMap("message", "Đã đăng xuất quản trị thành công."));
     }
 }
-
