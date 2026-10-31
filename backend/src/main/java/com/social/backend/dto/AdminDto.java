@@ -16,6 +16,8 @@ public class AdminDto {
             String profilePictureUrl,
             String role,
             String status,
+            LocalDateTime blockedUntil,
+            String blockReason,
             LocalDateTime createdAt,
             LocalDateTime lastLoginAt,
             long postsAnalyzedCount
@@ -39,5 +41,10 @@ public class AdminDto {
 
     public record StatusUpdateRequest(
             String status
+    ) {}
+
+    public record UserLockRequest(
+            String duration, // "1_DAY", "7_DAYS", "30_DAYS", "PERMANENT"
+            String reason
     ) {}
 }

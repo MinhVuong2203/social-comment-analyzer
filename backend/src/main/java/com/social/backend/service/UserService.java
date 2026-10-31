@@ -43,6 +43,13 @@ public class UserService {
             user.setName(name);
             user.setProfilePictureUrl(profilePictureUrl);
             user.setLastLoginAt(LocalDateTime.now());
+            
+            // Tự động gỡ khóa nếu đã hết hạn
+            if (user.getStatus() == User.UserStatus.BLOCKED && user.getBlockedUntil() != null && LocalDateTime.now().isAfter(user.getBlockedUntil())) {
+                user.setStatus(User.UserStatus.ACTIVE);
+                user.setBlockedUntil(null);
+                user.setBlockReason(null);
+            }
         } else {
             user = User.builder()
                     .threadsUserId(threadsUserId)
@@ -65,9 +72,20 @@ public class UserService {
         return userRepository.findById(id);
     }
 
+    @Transactional
     public List<AdminDto.UserSummary> getAllUsersForAdmin() {
         List<User> users = userRepository.findAll();
+        LocalDateTime now = LocalDateTime.now();
+
         return users.stream().map(u -> {
+            // Tự động kiểm tra nếu đã hết hạn khóa thì mở lại
+            if (u.getStatus() == User.UserStatus.BLOCKED && u.getBlockedUntil() != null && now.isAfter(u.getBlockedUntil())) {
+                u.setStatus(User.UserStatus.ACTIVE);
+                u.setBlockedUntil(null);
+                u.setBlockReason(null);
+                userRepository.save(u);
+            }
+
             long analyzedCount = analysisResultRepository.countByThreadsUserId(u.getThreadsUserId());
             return new AdminDto.UserSummary(
                     u.getId(),
@@ -77,11 +95,50 @@ public class UserService {
                     u.getProfilePictureUrl(),
                     u.getRole().name(),
                     u.getStatus().name(),
+                    u.getBlockedUntil(),
+                    u.getBlockReason(),
                     u.getCreatedAt(),
                     u.getLastLoginAt(),
                     analyzedCount
             );
         }).toList();
+    }
+
+    @Transactional
+    public User lockUser(Long userId, String duration, String reason) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng với id: " + userId));
+
+        LocalDateTime blockedUntil = null;
+        if (duration != null) {
+            String norm = duration.trim().toUpperCase();
+            if (norm.contains("1_DAY") || norm.equals("1")) {
+                blockedUntil = LocalDateTime.now().plusDays(1);
+            } else if (norm.contains("7_DAY") || norm.equals("7")) {
+                blockedUntil = LocalDateTime.now().plusDays(7);
+            } else if (norm.contains("30_DAY") || norm.equals("30")) {
+                blockedUntil = LocalDateTime.now().plusDays(30);
+            }
+            // "PERMANENT" hoặc khác giữ nguyên blockedUntil = null (khóa đến khi mở lại)
+        }
+
+        user.setStatus(User.UserStatus.BLOCKED);
+        user.setBlockedUntil(blockedUntil);
+        user.setBlockReason(reason != null && !reason.isBlank() ? reason.trim() : "Khóa bởi Quản trị viên");
+
+        return userRepository.save(user);
+    }
+
+    @Transactional
+    public User unlockUser(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng với id: " + userId));
+
+        user.setStatus(User.UserStatus.ACTIVE);
+        user.setBlockedUntil(null);
+        user.setBlockReason(null);
+
+        return userRepository.save(user);
     }
 
     @Transactional
@@ -91,6 +148,10 @@ public class UserService {
 
         User.UserStatus status = User.UserStatus.valueOf(statusStr.toUpperCase());
         user.setStatus(status);
+        if (status == User.UserStatus.ACTIVE) {
+            user.setBlockedUntil(null);
+            user.setBlockReason(null);
+        }
         return userRepository.save(user);
     }
 }
