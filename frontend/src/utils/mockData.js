@@ -187,3 +187,37 @@ export const mockReplyDetail = {
     latencyNote: 'Edge-cached ONNX',
   },
 };
+
+
+export const mockPosts = [
+  {
+    id: 'post_1',
+    username: '@nguyenminh',
+    time: '2 giờ trước',
+    text: 'Bạn nghĩ sao về công nghệ AI hiện nay? Anh em có thấy nó đang thay đổi tốc độ làm việc thực tế không?',
+    likes: '1.2K',
+    replies: 184,
+    totalReplies: 184,
+    analyzed: true,
+  },
+  {
+    id: 'post_2',
+    username: '@techvietnam',
+    time: '5 giờ trước',
+    text: 'ChatGPT hay Gemini? Mọi người đang dùng tool AI nào để làm việc hiệu quả nhất?',
+    likes: '876',
+    replies: 97,
+    totalReplies: 97,
+    analyzed: false,
+  },
+  {
+    id: 'post_3',
+    username: '@dev.hanoi',
+    time: '8 giờ trước',
+    text: 'Lập trình viên có bị AI thay thế trong 5 năm tới không? Mình thấy nhiều bạn lo lắng vấn đề này lắm.',
+    likes: '2.1K',
+    replies: 263,
+    totalReplies: 263,
+    analyzed: false,
+  }
+];

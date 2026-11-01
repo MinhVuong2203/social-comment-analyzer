@@ -17,7 +17,7 @@ export default function OverviewPage() {
       <SentimentCard />
       <ToxicityCard />
       <QuickActions onAction={(id) => {
-        if (id === 'view-replies' || id === 'filter-toxic') {
+        if (id === 'view-replies' || id === 'filter-toxic' || id === 'deep-analysis') {
           navigate('/comments');
         }
       }} />
