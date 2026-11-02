@@ -1,64 +1,38 @@
 import { useState } from 'react';
 import './ThreadInfoCard.css';
-const MOCK_POSTS = [
-  {
-    id: 1,
-    username: '@nguyenminh',
-    time: '2 giờ trước',
-    content: '"Bạn nghĩ sao về công nghệ AI hiện nay? Anh em có thấy nó đang thay đổi tốc độ làm việc thực tế không?"',
-    likes: '1.2K', shares: 328, replies: 184,
-    repliesFound: 184, active: true,
-  },
-  {
-    id: 2,
-    username: '@techvietnam',
-    time: '5 giờ trước',
-    content: '"ChatGPT hay Gemini? Mọi người đang dùng tool AI nào để làm việc hiệu quả nhất?"',
-    likes: '876', shares: 214, replies: 97,
-    repliesFound: 97, active: false,
-  },
-  {
-    id: 3,
-    username: '@dev.hanoi',
-    time: '8 giờ trước',
-    content: '"Lập trình viên có bị AI thay thế trong 5 năm tới không? Mình thấy nhiều bạn lo lắng vấn đề này lắm."',
-    likes: '2.1K', shares: 512, replies: 263,
-    repliesFound: 263, active: false,
-  },
-  {
-    id: 4,
-    username: '@startup.vn',
-    time: '1 ngày trước',
-    content: '"Startup Việt Nam đang ứng dụng AI như thế nào? Chia sẻ case study thực tế của công ty bạn nhé!"',
-    likes: '445', shares: 89, replies: 52,
-    repliesFound: 52, active: false,
-  },
-  {
-    id: 5,
-    username: '@aifuture.vn',
-    time: '1 ngày trước',
-    content: '"Bạn có sẵn sàng trả tiền cho AI assistant không? Nếu có thì mức giá bao nhiêu là hợp lý?"',
-    likes: '993', shares: 177, replies: 138,
-    repliesFound: 138, active: false,
-  },
-  {
-    id: 6,
-    username: '@ml.vietnam',
-    time: '2 ngày trước',
-    content: '"Fine-tuning LLM với dữ liệu tiếng Việt — kinh nghiệm của mình sau 6 tháng thử nghiệm."',
-    likes: '1.5K', shares: 401, replies: 89,
-    repliesFound: 89, active: false,
-  },
-];
 
 const PAGE_SIZE = 3;
 
-export default function ThreadInfoCard({ onScan }) {
+export default function ThreadInfoCard({ 
+  posts = [], 
+  selectedPostId, 
+  onSelectPost, 
+  onScan, 
+  scanning = false,
+  username = "threads_user"
+}) {
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState(1);
 
-  const totalPages = Math.ceil(MOCK_POSTS.length / PAGE_SIZE);
-  const paginated  = MOCK_POSTS.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const displayPosts = posts.length > 0 ? posts : [];
+  const totalPages = Math.max(1, Math.ceil(displayPosts.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginated = displayPosts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const formatTime = (ts) => {
+    if (!ts) return "Mới đây";
+    try {
+      const date = new Date(ts);
+      if (isNaN(date.getTime())) return ts;
+      const diffMs = Date.now() - date.getTime();
+      const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+      if (diffHrs < 1) return "Vừa xong";
+      if (diffHrs < 24) return `${diffHrs} giờ trước`;
+      const diffDays = Math.floor(diffHrs / 24);
+      return `${diffDays} ngày trước`;
+    } catch {
+      return ts;
+    }
+  };
 
   return (
     <div className="tic-wrap">
@@ -66,88 +40,118 @@ export default function ThreadInfoCard({ onScan }) {
       {/* ── List header ── */}
       <div className="tic-list-header">
         <span className="tic-list-title">📋 Danh sách bài viết</span>
-        <span className="tic-list-count">{MOCK_POSTS.length} bài</span>
+        <span className="tic-list-count">{displayPosts.length} bài</span>
       </div>
 
       {/* ── Post list ── */}
       <div className="tic-list">
-        {paginated.map(post => (
-          <div
-            key={post.id}
-            className={`tic-post-item ${selected === post.id ? 'tic-post-selected' : ''}`}
-            onClick={() => setSelected(post.id)}
-          >
-            <div className="tic-post-head">
-              <div className="tic-user">
-                <div className="tic-avatar" />
-                <div className="tic-user-meta">
-                  <span className="tic-username">{post.username}</span>
-                  <span className="tic-sep">•</span>
-                  <span className="tic-time">{post.time}</span>
+        {displayPosts.length === 0 ? (
+          <div style={{ padding: '16px 8px', textAlign: 'center', color: 'var(--text-muted)' }}>
+            Chưa có bài viết nào được tải. Nhấn quét bên dưới để đồng bộ bài viết từ Threads.
+          </div>
+        ) : (
+          paginated.map((post) => {
+            const isSelected = selectedPostId ? (post.id === selectedPostId) : false;
+            return (
+              <div
+                key={post.id}
+                className={`tic-post-item ${isSelected ? 'tic-post-selected' : ''}`}
+                onClick={() => onSelectPost?.(post.id)}
+              >
+                <div className="tic-post-head">
+                  <div className="tic-user">
+                    <div className="tic-avatar">
+                      {(username || 'U').charAt(0).toUpperCase()}
+                    </div>
+                    <div className="tic-user-meta">
+                      <span className="tic-username">@{username || 'threads_user'}</span>
+                      <span className="tic-sep">•</span>
+                      <span className="tic-time">{formatTime(post.timestamp)}</span>
+                    </div>
+                  </div>
+                  <div className="tic-post-badges">
+                    {post.analyzed ? (
+                      <span className="tic-active-badge">
+                        <span className="tic-pulse" />
+                        Đã phân tích
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Chưa phân tích</span>
+                    )}
+                    {isSelected && (
+                      <span className="tic-selected-badge">✓ Đang chọn</span>
+                    )}
+                  </div>
+                </div>
+
+                <p className="tic-content">
+                  {post.text ? `"${post.text}"` : "(Bài viết không có nội dung văn bản)"}
+                </p>
+
+                <div className="tic-stats">
+                  {post.permalink && (
+                    <a 
+                      href={post.permalink} 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      onClick={(e) => e.stopPropagation()} 
+                      style={{ color: 'var(--text-muted)', textDecoration: 'none' }}
+                    >
+                      🔗 Threads
+                    </a>
+                  )}
+                  <span className="tic-replies-found">
+                    <span className="tic-found-dot" />
+                    {post.totalReplies ?? 0} replies
+                  </span>
                 </div>
               </div>
-              <div className="tic-post-badges">
-                {post.active && (
-                  <span className="tic-active-badge">
-                    <span className="tic-pulse" />
-                    Active
-                  </span>
-                )}
-                {selected === post.id && (
-                  <span className="tic-selected-badge">✓ Đang chọn</span>
-                )}
-              </div>
-            </div>
-
-            <p className="tic-content">{post.content}</p>
-
-            <div className="tic-stats">
-              <span>♥ {post.likes}</span>
-              <span>↺ {post.shares}</span>
-              <span>💬 {post.replies}</span>
-              <span className="tic-replies-found">
-                <span className="tic-found-dot" />
-                {post.repliesFound} replies
-              </span>
-            </div>
-          </div>
-        ))}
+            );
+          })
+        )}
       </div>
 
       {/* ── Pagination ── */}
-      <div className="tic-pagination">
-        <button
-          className="tic-page-btn"
-          onClick={() => setPage(p => Math.max(1, p - 1))}
-          disabled={page === 1}
-        >
-          ‹
-        </button>
-
-        {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+      {totalPages > 1 && (
+        <div className="tic-pagination">
           <button
-            key={p}
-            className={`tic-page-btn ${page === p ? 'tic-page-active' : ''}`}
-            onClick={() => setPage(p)}
+            className="tic-page-btn"
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
           >
-            {p}
+            ‹
           </button>
-        ))}
 
-        <button
-          className="tic-page-btn"
-          onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-          disabled={page === totalPages}
-        >
-          ›
-        </button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+            <button
+              key={p}
+              className={`tic-page-btn ${currentPage === p ? 'tic-page-active' : ''}`}
+              onClick={() => setPage(p)}
+            >
+              {p}
+            </button>
+          ))}
 
-        <span className="tic-page-info">{page} / {totalPages}</span>
-      </div>
+          <button
+            className="tic-page-btn"
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+          >
+            ›
+          </button>
+
+          <span className="tic-page-info">{currentPage} / {totalPages}</span>
+        </div>
+      )}
 
       {/* ── Scan button ── */}
-      <button className="tic-scan-btn" onClick={onScan}>
-        ↻ Quét lại replies thời gian thực
+      <button 
+        className="tic-scan-btn" 
+        onClick={onScan} 
+        disabled={scanning}
+        style={{ opacity: scanning ? 0.7 : 1, cursor: scanning ? 'not-allowed' : 'pointer' }}
+      >
+        {scanning ? '⏳ Đang phân tích AI & Lưu Database...' : '↻ Quét & Phân tích bài viết đã chọn'}
       </button>
 
     </div>
