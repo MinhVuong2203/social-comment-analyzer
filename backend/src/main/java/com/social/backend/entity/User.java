@@ -38,6 +38,12 @@ public class User {
     @Builder.Default
     private UserStatus status = UserStatus.ACTIVE;
 
+    @Column(name = "blocked_until")
+    private LocalDateTime blockedUntil;
+
+    @Column(name = "block_reason", length = 500)
+    private String blockReason;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -67,5 +73,15 @@ public class User {
     public enum UserStatus {
         ACTIVE,
         BLOCKED
+    }
+
+    public boolean isCurrentlyBlocked() {
+        if (this.status != UserStatus.BLOCKED) {
+            return false;
+        }
+        if (this.blockedUntil != null && LocalDateTime.now().isAfter(this.blockedUntil)) {
+            return false;
+        }
+        return true;
     }
 }

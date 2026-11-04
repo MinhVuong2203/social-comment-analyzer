@@ -1,21 +1,17 @@
-export const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
+const API_URL = import.meta.env.VITE_API_URL || "https://provider-egging-stratus.ngrok-free.dev";
+// cần chỉnh
 
 export const loginWithThreads = () => {
-    // window.location.href =
-    //     `${API_URL}/auth/threads`;
-    // Extension: mở tab mới thay vì redirect trong popup
-    if (typeof chrome !== 'undefined' && chrome.tabs) {
+    // Nếu chạy trong Chrome Extension: mở tab mới
+    if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.create) {
         chrome.tabs.create({ url: `${API_URL}/auth/threads` });
     } else {
         // Local dev: redirect bình thường
         window.location.href = `${API_URL}/auth/threads`;
     }
-
 };
 
-
 export const getCurrentUser = async () => {
-
     const response = await fetch(
         `${API_URL}/api/auth/me`,
         {
@@ -28,6 +24,15 @@ export const getCurrentUser = async () => {
         return null;
     }
 
+    if (response.status === 403) {
+        const data = await response.json().catch(() => ({}));
+        const err = new Error(data.error || "Tài khoản của bạn đã bị khóa bởi Quản trị viên.");
+        err.blocked = true;
+        err.blockedUntil = data.blockedUntil;
+        err.blockReason = data.blockReason;
+        throw err;
+    }
+
     if (!response.ok) {
         throw new Error(
             "Không thể lấy thông tin người dùng"
@@ -37,9 +42,7 @@ export const getCurrentUser = async () => {
     return await response.json();
 };
 
-
 export const logout = async () => {
-
     const response = await fetch(
         `${API_URL}/api/auth/logout`,
         {

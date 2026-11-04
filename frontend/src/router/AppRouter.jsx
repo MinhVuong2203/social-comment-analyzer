@@ -8,9 +8,13 @@ import {
 
 import LoginPage from "../pages/LoginPage";
 import AdminLoginPage from "../pages/AdminLoginPage";
+import AdminDashboardPage from "../pages/AdminDashboardPage";
+import AdminUsersPage from "../pages/AdminUsersPage";
+import AdminSubscriptionsPage from "../pages/AdminSubscriptionsPage";
 import OverviewPage from "../pages/OverviewPage";
 import CommentsPage from '../pages/CommentsPage';
 import StatisticsPage from '../pages/StatisticsPage';
+import ProfilePage from '../pages/ProfilePage';
 import Header from '../components/layout/Header';
 import { useAuth } from "../context/AuthContext";
 
@@ -44,12 +48,15 @@ function AppRouter() {
         <HashRouter>
             <Routes>
 
-                {/* Public */}
+                {/* Public & Admin routes*/}
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/admin/login" element={<AdminLoginPage />} />
-                <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
+                <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+                <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+                <Route path="/admin/users" element={<AdminUsersPage />} />
+                <Route path="/admin/subscriptions" element={<AdminSubscriptionsPage />} />
 
-                {/* Protected */}
+                {/* Protected User App */}
                 <Route element={
                     <ProtectedRoute>
                         <AppLayout />
@@ -59,6 +66,7 @@ function AppRouter() {
                     <Route path="/overview" element={<OverviewPage />} />
                     <Route path="/comments" element={<CommentsPage />} />
                     <Route path="/statistics" element={<StatisticsPage />} />
+                    <Route path="/profile" element={<ProfilePage />} />
                     <Route path="*" element={<Navigate to="/overview" replace />} />
                 </Route>
 

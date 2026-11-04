@@ -18,7 +18,7 @@ export default function AdminLoginPage() {
         setErrorMessage("");
 
         if (!username.trim()) {
-            setErrorMessage("Vui lòng nhập tên đăng nhập hoặc email quản trị.");
+            setErrorMessage("Vui lòng nhập tên đăng nhập hoặc email.");
             return;
         }
 

@@ -63,14 +63,14 @@ export const AuthProvider = ({ children }) => {
 
             await logoutService();
 
-            setUser(null);
-
         } catch (error) {
 
             console.error(
                 "Logout error:",
                 error
             );
+        } finally {
+            setUser(null);
         }
     };
 
