@@ -10,7 +10,7 @@ import java.util.Optional;
 @Repository
 public interface VipPlanRepository extends JpaRepository<VipPlan, Long> {
     List<VipPlan> findAllByOrderByPriceAsc();
+    List<VipPlan> findByIsActiveTrueOrderByPriceAsc();
     Optional<VipPlan> findByPlanCode(String planCode);
     boolean existsByPlanCode(String planCode);
 }
-
