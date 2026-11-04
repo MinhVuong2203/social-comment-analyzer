@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { Settings, Minus, X, LogOut } from 'lucide-react';
+import { Settings, Minus, X, LogOut, Crown } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import './Header.css';
 
 const TABS = [
-  { id: 'overview',   label: 'Tổng quan',    path: '/overview' },
-  { id: 'comments',   label: 'Bình luận',    path: '/comments' },
-  { id: 'ai-analysis',label: 'AI Analysis', path: '/ai-analysis' },
-  { id: 'statistics', label: 'Thống kê',  path: '/statistics' },
-  { id: 'settings',   label: 'Cài đặt',    path: '/settings' },
+  { id: 'overview',   label: 'Tổng quan',     path: '/overview' },
+  { id: 'comments',   label: 'Bình luận',     path: '/comments' },
+  { id: 'ai-analysis',label: 'AI Analysis',  path: '/ai-analysis' },
+  { id: 'statistics', label: 'Thống kê',   path: '/statistics' },
+  { id: 'profile',    label: 'Cá nhân & VIP', path: '/profile' },
+  { id: 'settings',   label: 'Cài đặt',     path: '/settings' },
 ];
 
 export default function Header() {
@@ -77,10 +78,35 @@ export default function Header() {
       </div>
 
       <div className="header-status">
-        <div className="status-badge" title={user?.name ? `${user.name} (@${user.username})` : undefined}>
+        {/* Clickable User Profile Badge with Avatar */}
+        <div 
+          className="user-profile-badge"
+          onClick={() => navigate('/profile')}
+          title="Nhấn để xem trang cá nhân & mua gói VIP"
+        >
+          {user?.profilePicture ? (
+            <img 
+              src={user.profilePicture} 
+              alt="Avatar" 
+              className="user-avatar-img" 
+            />
+          ) : (
+            <div className="user-avatar-fallback">
+              {(user?.name || user?.username || 'U').charAt(0).toUpperCase()}
+            </div>
+          )}
+
           <span className="status-dot" />
-          {user?.username ? `@${user.username}` : (user?.name || 'Connected to Threads')}
+
+          <span className="user-badge-name">
+            {user?.name || (user?.username ? `@${user.username}` : 'Cá nhân & VIP')}
+          </span>
+
+          <span className="vip-indicator-pill">
+            {user?.isVip ? '👑 VIP' : 'UPGRADE'}
+          </span>
         </div>
+
         <div className="status-version">V2.1.4 PRO</div>
       </div>
 

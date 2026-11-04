@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface UserSubscriptionRepository extends JpaRepository<UserSubscription, Long> {
@@ -13,5 +14,5 @@ public interface UserSubscriptionRepository extends JpaRepository<UserSubscripti
     long countByVipPlanIdAndStatus(Long vipPlanId, String status);
     long countByStatus(String status);
     List<UserSubscription> findByUserIdOrderByCreatedAtDesc(Long userId);
+    Optional<UserSubscription> findFirstByUserIdAndStatusOrderByEndAtDesc(Long userId, String status);
 }
-
