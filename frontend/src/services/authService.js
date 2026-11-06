@@ -3,12 +3,12 @@ export const API_URL = import.meta.env.VITE_API_URL;
 
 export const loginWithThreads = () => {
     // Nếu chạy trong Chrome Extension: mở tab mới
-    if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.create) {
-        chrome.tabs.create({ url: `${API_URL}/auth/threads` });
-    } else {
+    // if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.create) {
+    //     chrome.tabs.create({ url: `${API_URL}/auth/threads` });
+    // } else {
         // Local dev: redirect bình thường
         window.location.href = `${API_URL}/auth/threads`;
-    }
+    // }
 };
 
 export const getCurrentUser = async () => {
