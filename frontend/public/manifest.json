@@ -8,6 +8,6 @@
   },
   "permissions": ["activeTab", "scripting", "tabs", "cookies"],
   "host_permissions": [
-    "https://miss-pseudolegislative-mui.ngrok-free.dev/*"
+    "https://nonruinously-glariest-kyler.ngrok-free.dev/*"
   ]
 }

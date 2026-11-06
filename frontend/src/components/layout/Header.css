@@ -17,7 +17,7 @@
 .header-top {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .app-branding { display: flex; align-items: center; gap: 10px; }
@@ -46,7 +46,56 @@
 
 .app-subtitle { font-size: 10px; color: var(--text-muted); }
 
-.window-controls { display: flex; align-items: center; gap: 10px; color: var(--text-muted); }
+.header-top-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  font-family: inherit;
+  line-height: 1.2;
+}
+
+.btn-logout:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.2);
+}
+
+.btn-logout:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.btn-logout:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-logout .logout-icon {
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.btn-logout:hover:not(:disabled) .logout-icon {
+  transform: translateX(1px);
+}
+
+.window-controls { display: flex; align-items: center; gap: 8px; color: var(--text-muted); }
 
 .control-icon { cursor: pointer; transition: color 0.15s; }
 .control-icon:hover { color: var(--text-primary); }
@@ -54,17 +103,77 @@
 /* Status bar */
 .header-status { display: flex; justify-content: space-between; align-items: center; }
 
-.status-badge {
+/* Clickable User Profile Badge */
+.user-profile-badge {
   display: flex;
   align-items: center;
-  gap: 5px;
-  background: rgba(16,185,129,0.1);
-  border: 1px solid rgba(16,185,129,0.2);
-  color: var(--online);
-  padding: 3px 10px;
+  gap: 6px;
+  background: rgba(192, 193, 255, 0.08);
+  border: 1px solid rgba(192, 193, 255, 0.22);
+  color: var(--text-primary);
+  padding: 2.5px 8px 2.5px 3.5px;
   border-radius: 99px;
   font-size: 10.5px;
+  font-weight: 500;
+  max-width: 250px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.user-profile-badge:hover {
+  background: rgba(192, 193, 255, 0.18);
+  border-color: rgba(192, 193, 255, 0.5);
+  box-shadow: 0 0 12px rgba(192, 193, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.user-profile-badge:active {
+  transform: translateY(0);
+}
+
+.user-avatar-img {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  flex-shrink: 0;
+}
+
+.user-avatar-fallback {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--accent-gradient);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8.5px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.user-badge-name {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 600;
+  color: #f1f5f9;
+}
+
+.vip-indicator-pill {
+  font-size: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  padding: 1px 4.5px;
+  border-radius: 4px;
+  background: rgba(255, 215, 0, 0.15);
+  color: #ffd700;
+  border: 1px solid rgba(255, 215, 0, 0.35);
+  flex-shrink: 0;
 }
 
 .status-dot {
@@ -74,6 +183,7 @@
   border-radius: 50%;
   box-shadow: 0 0 6px var(--online);
   animation: hd-pulse 2s ease-in-out infinite;
+  flex-shrink: 0;
 }
 @keyframes hd-pulse {
   0%,100% { opacity: 1; }

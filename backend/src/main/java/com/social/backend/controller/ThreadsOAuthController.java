@@ -10,6 +10,8 @@ import jakarta.servlet.http.HttpSession;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -59,7 +61,7 @@ public class ThreadsOAuthController {
         if (error != null) {
             return ResponseEntity
                     .status(302)
-                    .header("Location", "http://localhost:5173/login?error=" + error)
+                    .header("Location", "http://localhost:5173/#/login?error=" + error)
                     .build();
         }
 
@@ -69,7 +71,7 @@ public class ThreadsOAuthController {
         if (code == null || code.isBlank()) {
             return ResponseEntity
                     .status(302)
-                    .header("Location", "http://localhost:5173/login?error=no_code")
+                    .header("Location", "http://localhost:5173/#/login?error=no_code")
                     .build();
         }
 
@@ -95,10 +97,17 @@ public class ThreadsOAuthController {
              * 3. Đồng bộ với cơ sở dữ liệu và kiểm tra khóa tài khoản
              */
             User dbUser = userService.syncThreadsUser(userId, username, name, profilePicture);
-            if (dbUser.getStatus() == User.UserStatus.BLOCKED) {
+            if (dbUser.isCurrentlyBlocked()) {
+                StringBuilder redirectUrl = new StringBuilder("http://localhost:5173/#/login?error=account_blocked");
+                if (dbUser.getBlockedUntil() != null) {
+                    redirectUrl.append("&until=").append(URLEncoder.encode(dbUser.getBlockedUntil().toString(), StandardCharsets.UTF_8));
+                }
+                if (dbUser.getBlockReason() != null) {
+                    redirectUrl.append("&reason=").append(URLEncoder.encode(dbUser.getBlockReason(), StandardCharsets.UTF_8));
+                }
                 return ResponseEntity
                         .status(302)
-                        .header("Location", "http://localhost:5173/login?error=account_blocked")
+                        .header("Location", redirectUrl.toString())
                         .build();
             }
 
@@ -125,7 +134,7 @@ public class ThreadsOAuthController {
             e.printStackTrace();
             return ResponseEntity
                     .status(302)
-                    .header("Location", "http://localhost:5173/login?error=oauth_failed")
+                    .header("Location", "http://localhost:5173/#/login?error=oauth_failed")
                     .build();
         }
     }
@@ -154,12 +163,23 @@ public class ThreadsOAuthController {
             role = u.getRole().name();
             status = u.getStatus().name();
 
-            if (u.getStatus() == User.UserStatus.BLOCKED) {
+            if (u.isCurrentlyBlocked()) {
                 session.invalidate();
-                return ResponseEntity.status(403).body(Map.of(
-                        "authenticated", false,
-                        "error", "Tài khoản của bạn đã bị khóa bởi Quản trị viên."
-                ));
+                Map<String, Object> errBody = new HashMap<>();
+                errBody.put("authenticated", false);
+                errBody.put("blocked", true);
+                errBody.put("error", "Tài khoản của bạn đã bị khóa bởi Quản trị viên.");
+                if (u.getBlockedUntil() != null) {
+                    errBody.put("blockedUntil", u.getBlockedUntil().toString());
+                }
+                if (u.getBlockReason() != null) {
+                    errBody.put("blockReason", u.getBlockReason());
+                }
+                return ResponseEntity.status(403).body(errBody);
+            } else if (u.getStatus() == User.UserStatus.BLOCKED) {
+                // Tự động mở khóa vì đã quá hạn khóa
+                userService.unlockUser(u.getId());
+                status = "ACTIVE";
             }
         }
 

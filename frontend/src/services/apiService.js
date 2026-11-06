@@ -10,6 +10,9 @@ const defaultHeaders = {
  * - AI Analysis (Single, Batch, Analyze Post)
  * - Dashboard Overview
  * - Admin Portal
+ * 
+ * Có cơ chế fallback tự động gọi thẳng FastAPI AI Service (port 8000)
+ * khi Spring Boot Backend chưa chạy hoặc đang offline.
  */
 export const apiService = {
     // ==================== THREADS POSTS & COMMENTS ====================
@@ -42,25 +45,69 @@ export const apiService = {
 
     // ==================== AI ANALYSIS ====================
     async predictSingle(text) {
-        const res = await fetch(`${API_URL}/api/analysis/predict`, {
-            method: "POST",
-            headers: defaultHeaders,
-            credentials: "include",
-            body: JSON.stringify({ text }),
-        });
-        if (!res.ok) throw new Error("Không thể phân tích bình luận");
-        return await res.json();
+        // 1. Thử gọi qua Spring Boot API Gateway
+        try {
+            const res = await fetch(`${API_URL}/api/analysis/predict`, {
+                method: "POST",
+                headers: defaultHeaders,
+                credentials: "include",
+                body: JSON.stringify({ text }),
+            });
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (springErr) {
+            console.warn("Spring Boot chưa khả dụng, thử kết nối trực tiếp FastAPI port 8000:", springErr);
+        }
+
+        // 2. Dự phòng: Gọi trực tiếp FastAPI AI Service (port 8000)
+        try {
+            const directRes = await fetch("http://localhost:8000/predict", {
+                method: "POST",
+                headers: defaultHeaders,
+                body: JSON.stringify({ text }),
+            });
+            if (directRes.ok) {
+                return await directRes.json();
+            }
+        } catch (fastApiErr) {
+            console.error("Không thể kết nối tới cả Spring Boot và FastAPI AI Service:", fastApiErr);
+        }
+
+        throw new Error("Không thể kết nối dịch vụ AI. Hãy chắc chắn AI Service đang chạy trên cổng 8000.");
     },
 
     async predictBatch(comments) {
-        const res = await fetch(`${API_URL}/api/analysis/batch`, {
-            method: "POST",
-            headers: defaultHeaders,
-            credentials: "include",
-            body: JSON.stringify({ comments }),
-        });
-        if (!res.ok) throw new Error("Không thể phân tích danh sách bình luận");
-        return await res.json();
+        // 1. Thử gọi qua Spring Boot API Gateway
+        try {
+            const res = await fetch(`${API_URL}/api/analysis/batch`, {
+                method: "POST",
+                headers: defaultHeaders,
+                credentials: "include",
+                body: JSON.stringify({ comments }),
+            });
+            if (res.ok) {
+                return await res.json();
+            }
+        } catch (springErr) {
+            console.warn("Spring Boot chưa khả dụng, thử kết nối trực tiếp FastAPI port 8000:", springErr);
+        }
+
+        // 2. Dự phòng: Gọi trực tiếp FastAPI AI Service (port 8000)
+        try {
+            const directRes = await fetch("http://localhost:8000/predict/batch", {
+                method: "POST",
+                headers: defaultHeaders,
+                body: JSON.stringify({ comments }),
+            });
+            if (directRes.ok) {
+                return await directRes.json();
+            }
+        } catch (fastApiErr) {
+            console.error("Không thể kết nối tới cả Spring Boot và FastAPI AI Service:", fastApiErr);
+        }
+
+        throw new Error("Không thể kết nối dịch vụ AI. Hãy chắc chắn AI Service đang chạy trên cổng 8000.");
     },
 
     async analyzePost(postId) {
@@ -165,7 +212,18 @@ export const apiService = {
     },
 
     async getAiHealth() {
-        const res = await fetch(`${API_URL}/api/health/ai`);
-        return await res.json();
+        // Thử kiểm tra qua Spring Boot hoặc trực tiếp cổng 8000
+        try {
+            const res = await fetch(`${API_URL}/api/health/ai`);
+            if (res.ok) return await res.json();
+        } catch (e) {
+            // ignore
+        }
+        try {
+            const directRes = await fetch("http://localhost:8000/health");
+            return await directRes.json();
+        } catch (e) {
+            return { status: "offline", error: e.message };
+        }
     },
 };
