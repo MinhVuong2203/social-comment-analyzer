@@ -60,7 +60,7 @@ export default function CommentsPage() {
     fetchPosts();
   }, [user]);
 
-  // ── Nạp bình luận khi chuyển bài viết ──
+  // ── Nạp bình luận và toàn bộ reply khi chuyển bài viết ──
   useEffect(() => {
     if (!selectedPostId) return;
 
@@ -72,7 +72,7 @@ export default function CommentsPage() {
 
     async function fetchComments() {
       setIsLoadingComments(true);
-      setStatusMsg('Đang tải bình luận từ Threads API...');
+      setStatusMsg('Đang lấy bình luận và các câu trả lời từ Threads API (/conversation)...');
       try {
         const res = await apiService.getPostComments(selectedPostId);
         if (res && res.comments && Array.isArray(res.comments)) {
@@ -99,6 +99,9 @@ export default function CommentsPage() {
 
               return {
                 id: c.id,
+                parentId: c.parentId || null,
+                isReply: Boolean(c.isReply || c.parentId),
+                replyToUser: c.replyToUser || null,
                 username: `@${c.username || 'threads_user'}`,
                 time: c.timestamp ? new Date(c.timestamp).toLocaleString('vi-VN') : 'Gần đây',
                 content: c.text,
@@ -121,7 +124,7 @@ export default function CommentsPage() {
               };
             });
             setReplies(mapped);
-            setStatusMsg(`✓ Đã nạp ${mapped.length} bình luận từ Threads.`);
+            setStatusMsg(`✓ Đã nạp ${mapped.length} bình luận & phản hồi từ Threads.`);
           }
         }
       } catch (err) {
@@ -140,6 +143,33 @@ export default function CommentsPage() {
   const selectedPost = useMemo(() => {
     return posts.find(p => String(p.id) === String(selectedPostId)) || posts[0];
   }, [posts, selectedPostId]);
+
+  // ── Xây dựng cấu trúc cây phân cấp (Top-level comments & Child replies) ──
+  const { topLevelItems, childMap, totalTopLevel, totalChildReplies } = useMemo(() => {
+    const childMap = new Map();
+    const topLevel = [];
+    const allIds = new Set(replies.map(r => String(r.id)));
+
+    replies.forEach(r => {
+      const pId = r.parentId ? String(r.parentId) : null;
+      if (pId && allIds.has(pId)) {
+        if (!childMap.has(pId)) childMap.set(pId, []);
+        childMap.get(pId).push(r);
+      } else {
+        topLevel.push(r);
+      }
+    });
+
+    const totalChild = replies.filter(r => r.isReply || r.parentId).length;
+    const totalTop = replies.length - totalChild;
+
+    return {
+      topLevelItems: topLevel,
+      childMap,
+      totalTopLevel: totalTop,
+      totalChildReplies: totalChild,
+    };
+  }, [replies]);
 
   // ── Dynamic Filters based on real comments state ──
   const dynamicFilters = useMemo(() => {
@@ -163,25 +193,23 @@ export default function CommentsPage() {
     return filters;
   }, [replies]);
 
-  // ── Filter and Sort ──
-  const filtered = useMemo(() => {
-    let list = [...replies];
+  // ── Lọc và sắp xếp theo cây phân cấp (Hierarchical Filtering & Sorting) ──
+  const displayItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
 
-    if (activeFilter !== 'all') {
+    const matchesFilter = (item) => {
       if (activeFilter === 'unprocessed') {
-        list = list.filter(r => !r.analyzed || r.sentiment === 'unprocessed');
-      } else {
-        list = list.filter(r => r.analyzed && r.sentiment === activeFilter);
+        if (item.analyzed && item.sentiment !== 'unprocessed') return false;
+      } else if (activeFilter !== 'all') {
+        if (!item.analyzed || item.sentiment !== activeFilter) return false;
       }
-    }
+      if (q) {
+        return item.content.toLowerCase().includes(q) || item.username.toLowerCase().includes(q);
+      }
+      return true;
+    };
 
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(r =>
-        r.content.toLowerCase().includes(q) ||
-        r.username.toLowerCase().includes(q)
-      );
-    }
+    let list = [...topLevelItems];
 
     if (sort === 'Most Toxic') {
       list.sort((a, b) => (b.toxicity || 0) - (a.toxicity || 0));
@@ -193,8 +221,29 @@ export default function CommentsPage() {
       list.sort((a, b) => b.id - a.id);
     }
 
-    return list;
-  }, [replies, activeFilter, search, sort]);
+    if (activeFilter === 'all' && !q) {
+      return list.map(p => ({
+        parent: p,
+        children: childMap.get(String(p.id)) || [],
+      }));
+    }
+
+    const result = [];
+    list.forEach(p => {
+      const pMatches = matchesFilter(p);
+      const allChildren = childMap.get(String(p.id)) || [];
+      const matchingChildren = allChildren.filter(matchesFilter);
+
+      if (pMatches || matchingChildren.length > 0) {
+        result.push({
+          parent: p,
+          children: matchingChildren.length > 0 ? matchingChildren : allChildren,
+        });
+      }
+    });
+
+    return result;
+  }, [topLevelItems, childMap, activeFilter, search, sort]);
 
   // ── Stats calculation ──
   const stats = useMemo(() => {
@@ -206,11 +255,11 @@ export default function CommentsPage() {
     return { posCount, neuCount, toxCount, unprocCount };
   }, [replies]);
 
-  // ── Phân tích TẤT CẢ bình luận trong bài viết ──
+  // ── Phân tích TẤT CẢ bình luận & replies trong bài viết ──
   const handleAnalyzeAll = async () => {
     if (isAnalyzing || replies.length === 0) return;
     setIsAnalyzing(true);
-    setStatusMsg(`Đang kết nối PhoBERT phân tích toàn bộ ${replies.length} bình luận...`);
+    setStatusMsg(`Đang kết nối PhoBERT phân tích toàn bộ ${replies.length} bình luận & phản hồi...`);
 
     try {
       let analysisDone = false;
@@ -230,6 +279,9 @@ export default function CommentsPage() {
 
               return {
                 id: c.id,
+                parentId: c.parentId || null,
+                isReply: Boolean(c.isReply || c.parentId),
+                replyToUser: c.replyToUser || null,
                 username: `@${c.username || 'threads_user'}`,
                 time: c.timestamp ? new Date(c.timestamp).toLocaleString('vi-VN') : 'Gần đây',
                 content: c.text,
@@ -320,7 +372,7 @@ export default function CommentsPage() {
       // Đánh dấu bài viết đã phân tích
       setPosts(prev => prev.map(p => p.id === selectedPostId ? { ...p, analyzed: true } : p));
       setShowNewBanner(false);
-      setStatusMsg(`✓ Đã phân tích thành công toàn bộ ${replies.length} bình luận bằng PhoBERT!`);
+      setStatusMsg(`✓ Đã phân tích thành công toàn bộ ${replies.length} bình luận & phản hồi bằng PhoBERT!`);
     } catch (e) {
       console.error(e);
       setStatusMsg('Có lỗi xảy ra trong quá trình phân tích.');
@@ -330,13 +382,13 @@ export default function CommentsPage() {
     }
   };
 
-  // ── Phân tích 1 bình luận riêng lẻ ──
+  // ── Phân tích 1 bình luận hoặc reply riêng lẻ ──
   const handleAnalyzeSingle = async (replyId) => {
     const target = replies.find(r => r.id === replyId);
     if (!target) return;
 
     setAnalyzingId(replyId);
-    setStatusMsg(`Đang phân tích bình luận của ${target.username} bằng PhoBERT...`);
+    setStatusMsg(`Đang phân tích phản hồi của ${target.username} bằng PhoBERT...`);
 
     try {
       let pred = null;
@@ -383,7 +435,7 @@ export default function CommentsPage() {
       }
     } catch (e) {
       console.error(e);
-      setStatusMsg('Lỗi khi phân tích bình luận.');
+      setStatusMsg('Lỗi khi phân tích phản hồi.');
     } finally {
       setAnalyzingId(null);
       setTimeout(() => setStatusMsg(''), 4500);
@@ -398,19 +450,19 @@ export default function CommentsPage() {
         <div className="ct-title-row">
           <div className="ct-title-left">
             <h2 className="ct-title">
-              Bình luận <span className="ct-live-badge">{replies.length} Threads</span>
+              Bình luận <span className="ct-live-badge">{replies.length} Tổng</span>
             </h2>
             <span className="ct-model-badge">● PhoBERT v2.1</span>
           </div>
 
-          {/* ⚡ NÚT PHÂN TÍCH TẤT CẢ BÌNH LUẬN TRONG BÀI VIẾT ⚡ */}
+          {/* ⚡ NÚT PHÂN TÍCH TẤT CẢ BÌNH LUẬN & REPLIES ⚡ */}
           <div className="ct-title-actions">
             <button
               type="button"
               className="ct-analyze-all-btn"
               onClick={handleAnalyzeAll}
               disabled={isAnalyzing || replies.length === 0}
-              title="Phân tích toàn bộ bình luận của bài viết bằng mô hình PhoBERT"
+              title="Phân tích toàn bộ bình luận và các câu trả lời bằng mô hình PhoBERT"
             >
               {isAnalyzing ? (
                 <>
@@ -427,7 +479,7 @@ export default function CommentsPage() {
         </div>
 
         <p className="ct-subtitle">
-          {replies.length} bình luận • {isMockMode ? 'Chế độ Demo (Mẫu)' : 'Dữ liệu trực tiếp từ tài khoản Threads'}
+          {totalTopLevel} bình luận gốc • {totalChildReplies} phản hồi (replies) • {isMockMode ? 'Chế độ Demo (Mẫu)' : 'Dữ liệu trực tiếp từ tài khoản Threads'}
         </p>
 
         {/* Thông báo tiến độ / trạng thái phân tích */}
@@ -564,14 +616,35 @@ export default function CommentsPage() {
             Nạp bình luận mẫu để thử nghiệm
           </button>
         </div>
+      ) : displayItems.length === 0 ? (
+        <div className="ct-empty-comments" style={{ padding: '24px 16px' }}>
+          <span className="ct-empty-icon">🔍</span>
+          <h4 className="ct-empty-title">Không tìm thấy kết quả phù hợp</h4>
+          <p className="ct-empty-desc">
+            Không có bình luận hay câu trả lời nào khớp với từ khóa hoặc bộ lọc đã chọn.
+          </p>
+          <button
+            type="button"
+            className="ct-refresh-btn"
+            style={{ marginTop: 6 }}
+            onClick={() => {
+              setFilter('all');
+              setSearch('');
+            }}
+          >
+            Xóa bộ lọc
+          </button>
+        </div>
       ) : (
         <div className="ct-list">
-          {filtered.map(reply => (
+          {displayItems.map(({ parent, children }) => (
             <ReplyCard
-              key={reply.id}
-              reply={reply}
+              key={parent.id}
+              reply={parent}
+              childReplies={children}
               onAnalyzeSingle={handleAnalyzeSingle}
-              isAnalyzing={isAnalyzing || analyzingId === reply.id}
+              isAnalyzing={isAnalyzing || analyzingId === parent.id}
+              analyzingId={analyzingId}
             />
           ))}
         </div>
@@ -581,7 +654,7 @@ export default function CommentsPage() {
       {showNewBanner && replies.length > 0 && stats.unprocCount > 0 && (
         <div className="ct-new-banner">
           <span className="ct-new-dot" />
-          <span className="ct-new-text">Có <strong>{stats.unprocCount} bình luận mới</strong> chưa được phân tích</span>
+          <span className="ct-new-text">Có <strong>{stats.unprocCount} bình luận &amp; phản hồi mới</strong> chưa được phân tích</span>
           <button
             className="ct-analyze-btn"
             onClick={handleAnalyzeAll}
@@ -598,6 +671,8 @@ export default function CommentsPage() {
         {stats.unprocCount > 0 && (
           <span className="ct-stat" style={{ color: '#facc15' }}>⏳ {stats.unprocCount} Chưa phân tích</span>
         )}
+        <span className="ct-stat" style={{ color: '#38bdf8' }}>💬 {totalTopLevel} Bình luận</span>
+        <span className="ct-stat" style={{ color: '#a78bfa' }}>↪ {totalChildReplies} Phản hồi</span>
         <span className="ct-stat ct-stat--pos">● {stats.posCount} Tích cực</span>
         <span className="ct-stat ct-stat--neu">● {stats.neuCount} Trung tính</span>
         <span className="ct-stat ct-stat--neg">● {stats.toxCount} Độc hại (Toxic)</span>
