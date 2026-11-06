@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || "https://provider-egging-stratus.ngrok-free.dev";
+export const API_URL = import.meta.env.VITE_API_URL || "https://provider-egging-stratus.ngrok-free.dev";
 // cần chỉnh
 
 export const loginWithThreads = () => {
