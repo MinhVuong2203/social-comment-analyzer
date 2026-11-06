@@ -28,7 +28,8 @@ public class WebConfig implements WebMvcConfigurer {
                 .addMapping("/**")
                 .allowedOrigins(
                         "http://localhost:5173",
-                        "http://127.0.0.1:5173"
+                        "http://127.0.0.1:5173",
+                        "https://extension-threads-analyze-production.up.railway.app"
                 )
                 .allowedMethods(
                         "GET",
