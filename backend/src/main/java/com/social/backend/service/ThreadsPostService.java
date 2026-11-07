@@ -125,18 +125,24 @@ public class ThreadsPostService {
     }
 
     /**
-     * Lưu các reply mới từ Threads API vào Database.
+     * Lưu bình luận + toàn bộ replies mới từ Threads API vào Database.
      *
-     * @return true nếu Threads trả về danh sách reply, false nếu không có token hoặc gọi API thất bại
+     * @return true nếu Threads trả về danh sách bình luận, false nếu không có token hoặc gọi API thất bại
      */
     @Transactional
     public boolean syncPostReplies(String postId, String accessToken) {
         if (accessToken == null || accessToken.isBlank()) {
             return false;
         }
-        JsonNode repliesNode;
+        JsonNode conversationNode;
         try {
-            repliesNode = threadsOAuthService.getPostReplies(postId, accessToken);
+            // 1. Ưu tiên gọi endpoint /conversation để lấy trọn vẹn cả bình luận cấp 1 + mọi replies con
+            conversationNode = threadsOAuthService.getPostConversation(postId, accessToken);
+
+            // 2. Nếu /conversation không có dữ liệu, tự động fallback về endpoint /replies
+            if (conversationNode == null || !conversationNode.path("data").isArray()) {
+                conversationNode = threadsOAuthService.getPostReplies(postId, accessToken);
+            }
         } catch (HttpStatusCodeException e) {
             // Không log cả exception vì URL của request có chứa access token
             log.warn("Threads API từ chối lấy replies của bài {}: {} {}",
@@ -147,35 +153,65 @@ public class ThreadsPostService {
             return false;
         }
 
-        if (repliesNode == null || !repliesNode.path("data").isArray()) {
+        if (conversationNode == null || !conversationNode.path("data").isArray()) {
             log.warn("Threads API trả về dữ liệu replies không hợp lệ cho bài {}", postId);
             return false;
         }
 
-        for (JsonNode item : repliesNode.get("data")) {
+        for (JsonNode item : conversationNode.get("data")) {
             String commentId = item.path("id").asText();
-            if (commentRepository.findByThreadsCommentId(commentId).isEmpty()) {
+            String username = item.path("username").asText("threads_user");
+            String text = item.path("text").asText("");
+            String timestamp = item.path("timestamp").asText("");
+
+            // Xử lý quan hệ phân cấp cha-con (replied_to)
+            String parentId = null;
+            boolean isReply = item.path("is_reply").asBoolean(false);
+
+            if (item.has("replied_to") && !item.get("replied_to").isNull()) {
+                JsonNode repliedToNode = item.get("replied_to");
+                String repliedToId = repliedToNode.isObject()
+                        ? repliedToNode.path("id").asText(null)
+                        : repliedToNode.asText(null);
+
+                // Nếu replied_to khác postId của bài gốc thì đây là reply của bình luận khác
+                if (repliedToId != null && !repliedToId.isBlank() && !repliedToId.equalsIgnoreCase(postId)) {
+                    parentId = repliedToId;
+                    isReply = true;
+                }
+            }
+
+            Optional<Comment> existingOpt = commentRepository.findByThreadsCommentId(commentId);
+            if (existingOpt.isEmpty()) {
                 commentRepository.save(Comment.builder()
                         .threadsCommentId(commentId)
                         .threadsPostId(postId)
-                        .username(item.path("username").asText("threads_user"))
-                        .text(item.path("text").asText(""))
-                        .threadsTimestamp(item.path("timestamp").asText(""))
+                        .parentId(parentId)
+                        .isReply(isReply)
+                        .username(username)
+                        .text(text)
+                        .threadsTimestamp(timestamp)
                         .build());
+            } else {
+                Comment comment = existingOpt.get();
+                comment.setParentId(parentId);
+                comment.setIsReply(isReply);
+                comment.setText(text);
+                commentRepository.save(comment);
             }
         }
         return true;
     }
 
     /**
-     * Lấy bình luận từ Threads API hoặc Database, kèm theo kết quả AI (nếu đã phân tích)
+     * Lấy bình luận + toàn bộ replies từ Threads API hoặc Database, kèm theo kết quả AI (nếu đã phân tích)
      */
     @Transactional
     public List<CommentAnalysisDto> getPostCommentsWithAnalysis(String postId, String accessToken) {
         // Tiếp tục đọc từ DB nếu Threads API gặp sự cố
         syncPostReplies(postId, accessToken);
 
-        // Lấy tất cả comments đã lưu cho postId
+        // Lấy tất cả comments và replies đã lưu cho postId
         List<Comment> comments = commentRepository.findByThreadsPostIdOrderByCreatedAtDesc(postId);
         List<Prediction> predictions = predictionRepository.findByThreadsPostId(postId);
 
@@ -213,7 +249,9 @@ public class ThreadsPostService {
                     c.getThreadsTimestamp(),
                     tox,
                     hate,
-                    sent
+                    sent,
+                    c.getParentId(),
+                    c.getIsReply() != null ? c.getIsReply() : false
             ));
         }
 
