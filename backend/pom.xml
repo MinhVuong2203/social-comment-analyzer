@@ -89,6 +89,13 @@
 			<version>2.8.5</version>
 		</dependency>
 
+		<!-- Xuất báo cáo thống kê dạng XLSX -->
+		<dependency>
+			<groupId>org.apache.poi</groupId>
+			<artifactId>poi-ooxml</artifactId>
+			<version>5.4.1</version>
+		</dependency>
+
 	</dependencies>
 
 	<build>
