@@ -13,6 +13,7 @@ import com.social.backend.repository.VipPlanRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +35,9 @@ public class PaymentService {
     private final PaymentTransactionRepository paymentTransactionRepository;
     private final UserRepository userRepository;
     private final JdbcTemplate jdbcTemplate;
+
+    @Value("${app.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
 
     /**
      * Tự động đồng bộ toàn bộ người dùng từ bảng 'users' sang 'app_users'
@@ -155,13 +159,17 @@ public class PaymentService {
         paymentTransactionRepository.save(transaction);
 
         // URLs khi hoàn tất hoặc hủy
+        String baseUrl = (frontendUrl != null && frontendUrl.endsWith("/"))
+                ? frontendUrl.substring(0, frontendUrl.length() - 1)
+                : (frontendUrl != null ? frontendUrl : "http://localhost:5173");
+
         String returnUrl = (request.returnUrl() != null && !request.returnUrl().isBlank())
                 ? request.returnUrl()
-                : "http://localhost:5173/#/profile?payment=success&orderCode=" + orderCode;
+                : baseUrl + "/#/profile?payment=success&orderCode=" + orderCode;
 
         String cancelUrl = (request.cancelUrl() != null && !request.cancelUrl().isBlank())
                 ? request.cancelUrl()
-                : "http://localhost:5173/#/profile?payment=cancel&orderCode=" + orderCode;
+                : baseUrl + "/#/profile?payment=cancel&orderCode=" + orderCode;
 
         // Mô tả giao dịch
         String description = "VIP " + plan.getDurationDays() + " ngay";

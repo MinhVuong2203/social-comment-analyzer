@@ -7,6 +7,7 @@ import com.social.backend.service.UserService;
 
 import jakarta.servlet.http.HttpSession;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,13 +22,18 @@ public class ThreadsOAuthController {
 
     private final ThreadsOAuthService threadsOAuthService;
     private final UserService userService;
+    private final String frontendUrl;
 
     public ThreadsOAuthController(
             ThreadsOAuthService threadsOAuthService,
-            UserService userService
+            UserService userService,
+            @Value("${app.frontend.url:http://localhost:5173}") String frontendUrl
     ) {
         this.threadsOAuthService = threadsOAuthService;
         this.userService = userService;
+        this.frontendUrl = (frontendUrl != null && frontendUrl.endsWith("/"))
+                ? frontendUrl.substring(0, frontendUrl.length() - 1)
+                : frontendUrl;
     }
 
     /**
@@ -61,7 +67,7 @@ public class ThreadsOAuthController {
         if (error != null) {
             return ResponseEntity
                     .status(302)
-                    .header("Location", "http://localhost:5173/#/login?error=" + error)
+                    .header("Location", frontendUrl + "/#/login?error=" + error)
                     .build();
         }
 
@@ -71,7 +77,7 @@ public class ThreadsOAuthController {
         if (code == null || code.isBlank()) {
             return ResponseEntity
                     .status(302)
-                    .header("Location", "http://localhost:5173/#/login?error=no_code")
+                    .header("Location", frontendUrl + "/#/login?error=no_code")
                     .build();
         }
 
@@ -98,7 +104,7 @@ public class ThreadsOAuthController {
              */
             User dbUser = userService.syncThreadsUser(userId, username, name, profilePicture);
             if (dbUser.isCurrentlyBlocked()) {
-                StringBuilder redirectUrl = new StringBuilder("http://localhost:5173/#/login?error=account_blocked");
+                StringBuilder redirectUrl = new StringBuilder(frontendUrl).append("/#/login?error=account_blocked");
                 if (dbUser.getBlockedUntil() != null) {
                     redirectUrl.append("&until=").append(URLEncoder.encode(dbUser.getBlockedUntil().toString(), StandardCharsets.UTF_8));
                 }
@@ -127,14 +133,14 @@ public class ThreadsOAuthController {
              */
             return ResponseEntity
                     .status(302)
-                    .header("Location", "http://localhost:5173/")
+                    .header("Location", frontendUrl + "/")
                     .build();
 
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity
                     .status(302)
-                    .header("Location", "http://localhost:5173/#/login?error=oauth_failed")
+                    .header("Location", frontendUrl + "/#/login?error=oauth_failed")
                     .build();
         }
     }
