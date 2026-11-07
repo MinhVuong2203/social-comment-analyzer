@@ -1,6 +1,4 @@
 export const API_URL = import.meta.env.VITE_API_URL;
-console.log("VITE_API_URL:", import.meta.env.VITE_API_URL);
-console.log("API_URL:", API_URL);
 // cần chỉnh
 
 export const loginWithThreads = () => {
@@ -9,7 +7,6 @@ export const loginWithThreads = () => {
     //     chrome.tabs.create({ url: `${API_URL}/auth/threads` });
     // } else {
         // Local dev: redirect bình thường
-        console.log("API_URL:", API_URL);
         window.location.href = `${API_URL}/auth/threads`;
     // }
 };
