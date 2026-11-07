@@ -7,6 +7,7 @@ export const loginWithThreads = () => {
     //     chrome.tabs.create({ url: `${API_URL}/auth/threads` });
     // } else {
         // Local dev: redirect bình thường
+        console.log("API_URL:", API_URL);
         window.location.href = `${API_URL}/auth/threads`;
     // }
 };
