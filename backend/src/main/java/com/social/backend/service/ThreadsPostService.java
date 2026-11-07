@@ -120,29 +120,62 @@ public class ThreadsPostService {
     }
 
     /**
-     * Lấy bình luận từ Threads API hoặc Database, kèm theo kết quả AI (nếu đã phân tích)
+     * Lấy bình luận + toàn bộ replies từ Threads API hoặc Database, kèm theo kết quả AI (nếu đã phân tích)
      */
     @Transactional
     public List<CommentAnalysisDto> getPostCommentsWithAnalysis(String postId, String accessToken) {
-        // Đồng bộ comment mới từ Threads API nếu có accessToken
+        // Đồng bộ bình luận & replies mới từ Threads API nếu có accessToken
         if (accessToken != null && !accessToken.isBlank()) {
             try {
-                JsonNode repliesNode = threadsOAuthService.getPostReplies(postId, accessToken);
-                if (repliesNode != null && repliesNode.has("data") && repliesNode.get("data").isArray()) {
-                    for (JsonNode item : repliesNode.get("data")) {
+                // 1. Ưu tiên gọi endpoint /conversation để lấy trọn vẹn cả bình luận cấp 1 + mọi replies con
+                JsonNode conversationNode = threadsOAuthService.getPostConversation(postId, accessToken);
+
+                // 2. Nếu /conversation không có dữ liệu, tự động fallback về endpoint /replies
+                if (conversationNode == null || !conversationNode.has("data") || !conversationNode.get("data").isArray()) {
+                    conversationNode = threadsOAuthService.getPostReplies(postId, accessToken);
+                }
+
+                if (conversationNode != null && conversationNode.has("data") && conversationNode.get("data").isArray()) {
+                    for (JsonNode item : conversationNode.get("data")) {
                         String commentId = item.path("id").asText();
                         String username = item.path("username").asText("threads_user");
                         String text = item.path("text").asText("");
                         String timestamp = item.path("timestamp").asText("");
 
-                        if (commentRepository.findByThreadsCommentId(commentId).isEmpty()) {
+                        // Xử lý quan hệ phân cấp cha-con (replied_to)
+                        String parentId = null;
+                        boolean isReply = item.path("is_reply").asBoolean(false);
+
+                        if (item.has("replied_to") && !item.get("replied_to").isNull()) {
+                            JsonNode repliedToNode = item.get("replied_to");
+                            String repliedToId = repliedToNode.isObject()
+                                    ? repliedToNode.path("id").asText(null)
+                                    : repliedToNode.asText(null);
+
+                            // Nếu replied_to khác postId của bài gốc thì đây là reply của bình luận khác
+                            if (repliedToId != null && !repliedToId.isBlank() && !repliedToId.equalsIgnoreCase(postId)) {
+                                parentId = repliedToId;
+                                isReply = true;
+                            }
+                        }
+
+                        Optional<Comment> existingOpt = commentRepository.findByThreadsCommentId(commentId);
+                        if (existingOpt.isEmpty()) {
                             Comment comment = Comment.builder()
                                     .threadsCommentId(commentId)
                                     .threadsPostId(postId)
+                                    .parentId(parentId)
+                                    .isReply(isReply)
                                     .username(username)
                                     .text(text)
                                     .threadsTimestamp(timestamp)
                                     .build();
+                            commentRepository.save(comment);
+                        } else {
+                            Comment comment = existingOpt.get();
+                            comment.setParentId(parentId);
+                            comment.setIsReply(isReply);
+                            comment.setText(text);
                             commentRepository.save(comment);
                         }
                     }
@@ -152,7 +185,7 @@ public class ThreadsPostService {
             }
         }
 
-        // Lấy tất cả comments đã lưu cho postId
+        // Lấy tất cả comments và replies đã lưu cho postId
         List<Comment> comments = commentRepository.findByThreadsPostIdOrderByCreatedAtDesc(postId);
         List<Prediction> predictions = predictionRepository.findByThreadsPostId(postId);
 
@@ -190,7 +223,9 @@ public class ThreadsPostService {
                     c.getThreadsTimestamp(),
                     tox,
                     hate,
-                    sent
+                    sent,
+                    c.getParentId(),
+                    c.getIsReply() != null ? c.getIsReply() : false
             ));
         }
 
