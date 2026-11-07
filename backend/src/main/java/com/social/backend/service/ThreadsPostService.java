@@ -9,13 +9,18 @@ import com.social.backend.entity.Prediction;
 import com.social.backend.repository.CommentRepository;
 import com.social.backend.repository.PostRepository;
 import com.social.backend.repository.PredictionRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.HttpStatusCodeException;
 
 import java.util.*;
 
 @Service
 public class ThreadsPostService {
+
+    private static final Logger log = LoggerFactory.getLogger(ThreadsPostService.class);
 
     private final ThreadsOAuthService threadsOAuthService;
     private final PostRepository postRepository;
@@ -120,37 +125,55 @@ public class ThreadsPostService {
     }
 
     /**
+     * Lưu các reply mới từ Threads API vào Database.
+     *
+     * @return true nếu Threads trả về danh sách reply, false nếu không có token hoặc gọi API thất bại
+     */
+    @Transactional
+    public boolean syncPostReplies(String postId, String accessToken) {
+        if (accessToken == null || accessToken.isBlank()) {
+            return false;
+        }
+        JsonNode repliesNode;
+        try {
+            repliesNode = threadsOAuthService.getPostReplies(postId, accessToken);
+        } catch (HttpStatusCodeException e) {
+            // Không log cả exception vì URL của request có chứa access token
+            log.warn("Threads API từ chối lấy replies của bài {}: {} {}",
+                    postId, e.getStatusCode(), e.getResponseBodyAsString());
+            return false;
+        } catch (Exception e) {
+            log.warn("Không gọi được Threads API để lấy replies của bài {}: {}", postId, e.getClass().getSimpleName());
+            return false;
+        }
+
+        if (repliesNode == null || !repliesNode.path("data").isArray()) {
+            log.warn("Threads API trả về dữ liệu replies không hợp lệ cho bài {}", postId);
+            return false;
+        }
+
+        for (JsonNode item : repliesNode.get("data")) {
+            String commentId = item.path("id").asText();
+            if (commentRepository.findByThreadsCommentId(commentId).isEmpty()) {
+                commentRepository.save(Comment.builder()
+                        .threadsCommentId(commentId)
+                        .threadsPostId(postId)
+                        .username(item.path("username").asText("threads_user"))
+                        .text(item.path("text").asText(""))
+                        .threadsTimestamp(item.path("timestamp").asText(""))
+                        .build());
+            }
+        }
+        return true;
+    }
+
+    /**
      * Lấy bình luận từ Threads API hoặc Database, kèm theo kết quả AI (nếu đã phân tích)
      */
     @Transactional
     public List<CommentAnalysisDto> getPostCommentsWithAnalysis(String postId, String accessToken) {
-        // Đồng bộ comment mới từ Threads API nếu có accessToken
-        if (accessToken != null && !accessToken.isBlank()) {
-            try {
-                JsonNode repliesNode = threadsOAuthService.getPostReplies(postId, accessToken);
-                if (repliesNode != null && repliesNode.has("data") && repliesNode.get("data").isArray()) {
-                    for (JsonNode item : repliesNode.get("data")) {
-                        String commentId = item.path("id").asText();
-                        String username = item.path("username").asText("threads_user");
-                        String text = item.path("text").asText("");
-                        String timestamp = item.path("timestamp").asText("");
-
-                        if (commentRepository.findByThreadsCommentId(commentId).isEmpty()) {
-                            Comment comment = Comment.builder()
-                                    .threadsCommentId(commentId)
-                                    .threadsPostId(postId)
-                                    .username(username)
-                                    .text(text)
-                                    .threadsTimestamp(timestamp)
-                                    .build();
-                            commentRepository.save(comment);
-                        }
-                    }
-                }
-            } catch (Exception ignored) {
-                // Tiếp tục đọc từ DB nếu API gặp sự cố
-            }
-        }
+        // Tiếp tục đọc từ DB nếu Threads API gặp sự cố
+        syncPostReplies(postId, accessToken);
 
         // Lấy tất cả comments đã lưu cho postId
         List<Comment> comments = commentRepository.findByThreadsPostIdOrderByCreatedAtDesc(postId);

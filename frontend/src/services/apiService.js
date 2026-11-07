@@ -147,6 +147,28 @@ export const apiService = {
         return await res.json();
     },
 
+    // ==================== STATISTICS ====================
+    async getPostStatistics(postId) {
+        const res = await fetch(`${API_URL}/api/statistics/posts/${encodeURIComponent(postId)}`, {
+            method: "GET",
+            credentials: "include",
+        });
+        if (!res.ok) throw new Error("Không thể lấy thống kê bài viết");
+        return await res.json();
+    },
+
+    async exportPostStatistics(postId, format) {
+        const res = await fetch(
+            `${API_URL}/api/statistics/posts/${encodeURIComponent(postId)}/export?format=${encodeURIComponent(format)}`,
+            {
+                method: "GET",
+                credentials: "include",
+            }
+        );
+        if (!res.ok) throw new Error("Không thể xuất báo cáo");
+        return await res.blob();
+    },
+
     // ==================== ADMIN PORTAL ====================
     async adminLogin(username, password) {
         const res = await fetch(`${API_URL}/api/admin/auth/login`, {

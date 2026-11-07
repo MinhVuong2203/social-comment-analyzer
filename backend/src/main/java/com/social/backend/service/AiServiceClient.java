@@ -15,11 +15,14 @@ public class AiServiceClient {
 
     public AiServiceClient(
             RestClient.Builder builder,
-            @Value("${ai.service.base-url:http://localhost:8000}") String baseUrl
+            @Value("${ai.service.base-url:http://localhost:8000}") String baseUrl,
+            @Value("${ai.service.api-key:}") String apiKey
     ) {
-        this.client = builder
-                .baseUrl(baseUrl)
-                .build();
+        builder.baseUrl(baseUrl);
+        if (!apiKey.isBlank()) {
+            builder.defaultHeader("X-API-Key", apiKey);
+        }
+        this.client = builder.build();
     }
 
     public AiDto.SinglePredictResponse predict(String text) {
