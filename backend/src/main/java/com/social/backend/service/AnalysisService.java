@@ -51,35 +51,64 @@ public class AnalysisService {
 
     /**
      * Phân tích toàn bộ bình luận của một bài viết:
-     * 1. Lấy bình luận từ Threads API
-     * 2. Gọi AI Service suy luận batch cả 3 tác vụ
+     * 1. Lấy toàn bộ bình luận + reply từ Threads API qua /conversation (fallback /replies)
+     * 2. Gọi AI Service suy luận batch cả 3 tác vụ PhoBERT
      * 3. Lưu Post, Comments, Predictions và AnalysisResult vào DB
-     * 4. Trả về kết quả phân tích đầy đủ
+     * 4. Trả về kết quả phân tích đầy đủ kèm quan hệ cha-con
      */
     @Transactional
     public PostAnalysisResponse analyzePost(String postId, String threadsUserId, String accessToken) {
-        // 1. Thu thập danh sách bình luận (từ Threads API hoặc từ DB nếu đã fetch)
+        // 1. Thu thập danh sách bình luận + replies
         List<Comment> commentsToAnalyze = new ArrayList<>();
 
         if (accessToken != null && !accessToken.isBlank()) {
             try {
-                JsonNode repliesNode = threadsOAuthService.getPostReplies(postId, accessToken);
-                if (repliesNode != null && repliesNode.has("data") && repliesNode.get("data").isArray()) {
-                    for (JsonNode item : repliesNode.get("data")) {
+                // Ưu tiên /conversation để lấy cả comment cấp 1 và replies
+                JsonNode conversationNode = threadsOAuthService.getPostConversation(postId, accessToken);
+                if (conversationNode == null || !conversationNode.has("data") || !conversationNode.get("data").isArray()) {
+                    conversationNode = threadsOAuthService.getPostReplies(postId, accessToken);
+                }
+
+                if (conversationNode != null && conversationNode.has("data") && conversationNode.get("data").isArray()) {
+                    for (JsonNode item : conversationNode.get("data")) {
                         String commentId = item.path("id").asText();
                         String username = item.path("username").asText("threads_user");
                         String text = item.path("text").asText("");
                         String timestamp = item.path("timestamp").asText("");
 
+                        // Xử lý quan hệ phân cấp cha-con (replied_to)
+                        String parentId = null;
+                        boolean isReply = item.path("is_reply").asBoolean(false);
+
+                        if (item.has("replied_to") && !item.get("replied_to").isNull()) {
+                            JsonNode repliedToNode = item.get("replied_to");
+                            String repliedToId = repliedToNode.isObject()
+                                    ? repliedToNode.path("id").asText(null)
+                                    : repliedToNode.asText(null);
+
+                            if (repliedToId != null && !repliedToId.isBlank() && !repliedToId.equalsIgnoreCase(postId)) {
+                                parentId = repliedToId;
+                                isReply = true;
+                            }
+                        }
+
+                        final String finalParentId = parentId;
+                        final boolean finalIsReply = isReply;
+
                         Comment comment = commentRepository.findByThreadsCommentId(commentId)
                                 .orElseGet(() -> Comment.builder()
                                         .threadsCommentId(commentId)
                                         .threadsPostId(postId)
+                                        .parentId(finalParentId)
+                                        .isReply(finalIsReply)
                                         .username(username)
                                         .text(text)
                                         .threadsTimestamp(timestamp)
                                         .build());
 
+                        comment.setParentId(parentId);
+                        comment.setIsReply(isReply);
+                        comment.setText(text);
                         comment = commentRepository.save(comment);
                         commentsToAnalyze.add(comment);
                     }
@@ -175,7 +204,9 @@ public class AnalysisService {
                     c.getThreadsTimestamp(),
                     new CommentAnalysisDto.TaskSummary(toxLabel, toxConf),
                     new CommentAnalysisDto.TaskSummary(hateLabel, hateConf),
-                    new CommentAnalysisDto.TaskSummary(sentLabel, sentConf)
+                    new CommentAnalysisDto.TaskSummary(sentLabel, sentConf),
+                    c.getParentId(),
+                    c.getIsReply() != null ? c.getIsReply() : false
             ));
         }
 
@@ -234,7 +265,9 @@ public class AnalysisService {
                         c.getThreadsTimestamp(),
                         p != null ? new CommentAnalysisDto.TaskSummary(p.getToxicityLabel(), p.getToxicityConfidence()) : null,
                         p != null ? new CommentAnalysisDto.TaskSummary(p.getHateSpeechLabel(), p.getHateSpeechConfidence()) : null,
-                        p != null ? new CommentAnalysisDto.TaskSummary(p.getSentimentLabel(), p.getSentimentConfidence()) : null
+                        p != null ? new CommentAnalysisDto.TaskSummary(p.getSentimentLabel(), p.getSentimentConfidence()) : null,
+                        c.getParentId(),
+                        c.getIsReply() != null ? c.getIsReply() : false
                 );
             }).toList();
 
