@@ -1,8 +1,11 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, status
+import secrets
+from typing import Optional
+
+from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import LABELS
+from .config import API_KEY, BATCH_SIZE, LABELS
 from .model_manager import ModelManager
 from .schemas import (
     PredictRequest,
@@ -12,6 +15,16 @@ from .schemas import (
 )
 
 manager = ModelManager()
+
+
+def require_api_key(x_api_key: Optional[str] = Header(default=None)):
+    if API_KEY and not (
+        x_api_key and secrets.compare_digest(x_api_key.encode(), API_KEY.encode())
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API key không hợp lệ.",
+        )
 
 
 @asynccontextmanager
@@ -70,6 +83,7 @@ def models():
     "/predict",
     response_model=SinglePredictResponse,
     summary="Phân tích một bình luận (Toxicity, Hate Speech, Sentiment)",
+    dependencies=[Depends(require_api_key)],
 )
 def predict(request: PredictRequest):
     try:
@@ -86,6 +100,7 @@ def predict(request: PredictRequest):
     "/predict/batch",
     response_model=BatchPredictResponse,
     summary="Phân tích danh sách bình luận theo batch",
+    dependencies=[Depends(require_api_key)],
 )
 def predict_batch(request: BatchPredictRequest):
     try:
@@ -93,7 +108,10 @@ def predict_batch(request: BatchPredictRequest):
             {"id": c.id, "text": c.text}
             for c in request.comments
         ]
-        results = manager.predict_batch(raw_comments)
+        # Chia nhỏ để bài viết nhiều bình luận không làm tràn RAM
+        results = []
+        for start in range(0, len(raw_comments), BATCH_SIZE):
+            results.extend(manager.predict_batch(raw_comments[start:start + BATCH_SIZE]))
         return {
             "total": len(results),
             "predictions": results,
