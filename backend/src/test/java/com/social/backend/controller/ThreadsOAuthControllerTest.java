@@ -66,7 +66,7 @@ class ThreadsOAuthControllerTest {
         Optional<User> foundUser = Optional.empty();
 
         public StubUserService() {
-            super(null, null, null);
+            super(null, null, null, null);
         }
 
         @Override
@@ -84,7 +84,7 @@ class ThreadsOAuthControllerTest {
     void setUp() {
         stubThreadsService = new StubThreadsOAuthService();
         stubUserService = new StubUserService();
-        ThreadsOAuthController controller = new ThreadsOAuthController(stubThreadsService, stubUserService);
+        ThreadsOAuthController controller = new ThreadsOAuthController(stubThreadsService, stubUserService, "http://localhost:5173");
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
@@ -112,7 +112,7 @@ class ThreadsOAuthControllerTest {
                             .param("error", "access_denied")
                             .param("error_description", "User denied access"))
                     .andExpect(status().isFound())
-                    .andExpect(header().string("Location", "http://localhost:5173/login?error=access_denied"));
+                    .andExpect(header().string("Location", "http://localhost:5173/#/login?error=access_denied"));
         }
 
         @Test
@@ -120,7 +120,7 @@ class ThreadsOAuthControllerTest {
         void shouldRedirectToLoginWhenCodeIsMissing() throws Exception {
             mockMvc.perform(get("/auth/threads/callback"))
                     .andExpect(status().isFound())
-                    .andExpect(header().string("Location", "http://localhost:5173/login?error=no_code"));
+                    .andExpect(header().string("Location", "http://localhost:5173/#/login?error=no_code"));
         }
 
         @Test
@@ -179,7 +179,7 @@ class ThreadsOAuthControllerTest {
 
             mockMvc.perform(get("/auth/threads/callback").param("code", code))
                     .andExpect(status().isFound())
-                    .andExpect(header().string("Location", "http://localhost:5173/login?error=account_blocked"));
+                    .andExpect(header().string("Location", "http://localhost:5173/#/login?error=account_blocked"));
         }
 
         @Test
@@ -189,7 +189,7 @@ class ThreadsOAuthControllerTest {
 
             mockMvc.perform(get("/auth/threads/callback").param("code", "invalid_code"))
                     .andExpect(status().isFound())
-                    .andExpect(header().string("Location", "http://localhost:5173/login?error=oauth_failed"));
+                    .andExpect(header().string("Location", "http://localhost:5173/#/login?error=oauth_failed"));
         }
     }
 
