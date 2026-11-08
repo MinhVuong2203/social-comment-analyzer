@@ -1,6 +1,6 @@
 package com.social.backend.controller;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import com.social.backend.dto.PaymentDto;
 import com.social.backend.entity.User;
 import com.social.backend.repository.UserRepository;
@@ -86,16 +86,35 @@ public class PaymentController {
 
     /**
      * Webhook nhận thông báo kết quả thanh toán từ PayOS
-     * POST /api/payments/payos/webhook
+     * Hỗ trợ cả GET (healthcheck/ping) và POST (nhận dữ liệu thanh toán)
      */
-    @PostMapping("/payments/payos/webhook")
-    public ResponseEntity<Map<String, Object>> handlePayOSWebhook(@RequestBody JsonNode webhookPayload) {
+    @RequestMapping(value = "/payments/payos/webhook", method = {RequestMethod.GET, RequestMethod.POST})
+    public ResponseEntity<Map<String, Object>> handlePayOSWebhook(
+            @RequestBody(required = false) JsonNode webhookPayload
+    ) {
+        // Trường hợp PayOS ping kiểm tra kết nối (GET hoặc POST không có body)
+        if (webhookPayload == null || webhookPayload.isNull() || webhookPayload.isEmpty()) {
+            return ResponseEntity.ok(Map.of(
+                    "error", 0,
+                    "message", "Webhook endpoint is active",
+                    "success", true
+            ));
+        }
+
         try {
             boolean success = paymentService.handlePayOSWebhook(webhookPayload);
-            return ResponseEntity.ok(Map.of("success", success));
+            return ResponseEntity.ok(Map.of(
+                    "error", 0,
+                    "message", "success",
+                    "success", success
+            ));
         } catch (Exception e) {
             log.error("Lỗi xử lý PayOS webhook: {}", e.getMessage());
-            return ResponseEntity.ok(Map.of("success", false, "error", e.getMessage()));
+            return ResponseEntity.ok(Map.of(
+                    "error", 0,
+                    "message", "Webhook received: " + e.getMessage(),
+                    "success", false
+            ));
         }
     }
 
