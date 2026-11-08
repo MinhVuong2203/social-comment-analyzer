@@ -1,4 +1,38 @@
+import { useEffect, useState } from 'react';
 import '../assets/styles/StatisticsPage.css';
+import { apiService } from '../services/apiService';
+
+const SENTIMENT_COLORS = {
+  POSITIVE: '#10b981',
+  NEUTRAL: '#6b7280',
+  NEGATIVE: '#f87171',
+};
+
+const STATUS_BADGES = {
+  FINALIZED:       { label: 'Đã chốt số',     modifier: '' },
+  HAS_NEW_REPLIES: { label: 'Có reply mới',   modifier: 'st-hero-badge--warn' },
+  NOT_ANALYZED:    { label: 'Chưa phân tích', modifier: 'st-hero-badge--warn' },
+  NO_REPLIES:      { label: 'Chưa có reply',  modifier: 'st-hero-badge--muted' },
+};
+
+const EXPORT_FORMATS = [
+  { id: 'csv',  label: '.CSV',  icon: '⊞' },
+  { id: 'json', label: '.JSON', icon: '{}' },
+  { id: 'xlsx', label: '.XLSX', icon: '📄' },
+];
+
+/* Vị trí 4 nhãn trên trục thời gian, trong 12 mốc của biểu đồ */
+const XAXIS_POINT_INDEXES = [0, 4, 7, 11];
+
+function formatElapsed(minutes) {
+  if (minutes < 60) return `+${minutes}m`;
+  if (minutes < 1440) {
+    const m = minutes % 60;
+    return `+${Math.floor(minutes / 60)}h${m ? ` ${m}m` : ''}`;
+  }
+  const h = Math.floor((minutes % 1440) / 60);
+  return `+${Math.floor(minutes / 1440)}d${h ? ` ${h}h` : ''}`;
+}
 
 /* ── Mini bar ── */
 function Bar({ value, color, height = 3 }) {
@@ -10,14 +44,16 @@ function Bar({ value, color, height = 3 }) {
 }
 
 /* ── Donut SVG ── */
-function Donut() {
+function Donut({ stats }) {
   const r = 48, cx = 60, cy = 60, stroke = 8;
   const circ = 2 * Math.PI * r;
   const segments = [
-    { value: 42.6, color: '#10b981' },
-    { value: 38.1, color: '#6b7280' },
-    { value: 19.3, color: '#f87171' },
+    { value: stats.positive.percent, color: SENTIMENT_COLORS.POSITIVE, label: 'Tích cực' },
+    { value: stats.neutral.percent,  color: SENTIMENT_COLORS.NEUTRAL,  label: 'Trung tính' },
+    { value: stats.negative.percent, color: SENTIMENT_COLORS.NEGATIVE, label: 'Tiêu cực' },
   ];
+  const dominant = segments.reduce((best, s) => (s.value > best.value ? s : best));
+  const hasData = stats.analyzedReplies > 0;
   let offset = 0;
   return (
     <svg width="120" height="120" viewBox="0 0 120 120">
@@ -38,18 +74,18 @@ function Donut() {
         );
       })}
       <text x={cx} y={cy - 6} textAnchor="middle" fill="#f1f5f9"
-        fontSize="13" fontWeight="800">42.6%</text>
-      <text x={cx} y={cy + 9} textAnchor="middle" fill="#10b981"
-        fontSize="9" fontWeight="600">Tích cực</text>
+        fontSize="13" fontWeight="800">{hasData ? `${dominant.value}%` : '—'}</text>
+      <text x={cx} y={cy + 9} textAnchor="middle" fill={hasData ? dominant.color : '#6b7280'}
+        fontSize="9" fontWeight="600">{hasData ? dominant.label : 'Chưa có dữ liệu'}</text>
     </svg>
   );
 }
 
 /* ── Line chart SVG ── */
-function LineChart() {
+function LineChart({ points }) {
   const W = 320, H = 110;
-  const toxic   = [2,3,4,5,6,8,10,13,17,22,26,28];
-  const negative = [5,7,9,11,14,17,20,24,28,31,33,32];
+  const toxic    = points.map(p => p.toxic);
+  const negative = points.map(p => p.negative);
 
   const toX = (i, len) => 20 + (i / (len - 1)) * (W - 30);
   const toY = (v, max) => H - 10 - (v / max) * (H - 20);
@@ -60,7 +96,7 @@ function LineChart() {
   const areaD = (pts, max) =>
     `${pathD(pts, max)} L${toX(pts.length - 1, pts.length)},${H - 10} L${toX(0, pts.length)},${H - 10} Z`;
 
-  const max = 36;
+  const max = Math.max(1, ...toxic, ...negative) * 1.1;
 
   return (
     <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block' }}>
@@ -94,37 +130,62 @@ function LineChart() {
   );
 }
 
-/* ── Keywords ── */
-const KEYWORDS = [
-  { tag: '#AI',          count: 48,  color: '#10b981', bold: true },
-  { tag: '#công nghệ',   count: 39,  color: '#10b981', bold: true },
-  { tag: '#chất lượng',  count: 27,  color: null },
-  { tag: '#trải nghiệm', count: 31,  color: '#22d3ee', bold: true },
-  { tag: '#tương lai',   count: 19,  color: null },
-  { tag: '#giá cả',      count: 22,  color: '#f87171', bold: false },
-  { tag: '#sản phẩm',    count: 18,  color: null },
-  { tag: '#tự động hóa', count: 14,  color: null },
-];
+function TrendSection({ trend }) {
+  const { points, skippedReplies, startsAtPost } = trend;
+  const hasPoints = points.length > 0;
+  const lastMinutes = hasPoints ? points[points.length - 1].minutesFromStart : 0;
 
-export default function StatisticsPage() {
   return (
-    <div className="st-wrap">
-
-      {/* ── Hero card ── */}
-      <div className="st-hero">
-        <div className="st-hero-left">
-          <div className="st-hero-title-row">
-            <span className="st-hero-icon">〜</span>
-            <h2 className="st-hero-title">Thống kê Threads Post</h2>
-          </div>
-          <p className="st-hero-sub">Báo cáo tổng quan dữ liệu 184 replies • Real-time stream</p>
-        </div>
-        <span className="st-hero-badge">
-          <span className="st-hero-badge-dot" />
-          Đã chốt số
-        </span>
+    <div className="st-section">
+      <div className="st-section-head">
+        <span className="st-section-icon">〜</span>
+        <span className="st-section-title">Xu hướng độc hại theo thời gian</span>
+        {hasPoints && <span className="st-section-meta">T0 → {formatElapsed(lastMinutes)}</span>}
       </div>
+      {hasPoints ? (
+        <>
+          <div className="st-chart-wrap">
+            <LineChart points={points} />
+          </div>
+          <div className="st-chart-xaxis">
+            {XAXIS_POINT_INDEXES.map((pointIndex, i) => (
+              <span key={pointIndex} style={i === XAXIS_POINT_INDEXES.length - 1 ? { color: '#f87171' } : undefined}>
+                {i === 0
+                  ? `T0 (${startsAtPost ? 'Bài đăng' : 'Reply đầu'})`
+                  : formatElapsed(points[pointIndex].minutesFromStart)}
+              </span>
+            ))}
+          </div>
+          <div className="st-chart-legend">
+            <span className="st-chart-legend-item">
+              <span className="st-chart-dot" style={{ background: '#f87171' }} />
+              Lượng Toxic phản hồi
+            </span>
+            <span className="st-chart-legend-item">
+              <span className="st-chart-dot" style={{ background: '#8b5cf6' }} />
+              Bình luận tiêu cực tổng
+            </span>
+          </div>
+        </>
+      ) : (
+        <p className="st-empty">Chưa có reply đã phân tích để vẽ biểu đồ.</p>
+      )}
+      {skippedReplies > 0 && (
+        <p className="st-note">{skippedReplies} reply không có thời gian hợp lệ nên không được tính vào biểu đồ.</p>
+      )}
+    </div>
+  );
+}
 
+function StatisticsContent({ stats }) {
+  const sentiments = [
+    { label: 'Tích cực (Positive)',  data: stats.positive, color: SENTIMENT_COLORS.POSITIVE },
+    { label: 'Trung tính (Neutral)', data: stats.neutral,  color: SENTIMENT_COLORS.NEUTRAL },
+    { label: 'Tiêu cực (Negative)',  data: stats.negative, color: SENTIMENT_COLORS.NEGATIVE },
+  ];
+
+  return (
+    <>
       {/* ── Metric grid ── */}
       <div className="st-metric-grid">
         <div className="st-metric-card">
@@ -133,10 +194,12 @@ export default function StatisticsPage() {
             <span className="st-metric-icon">💬</span>
           </div>
           <div className="st-metric-val-row">
-            <span className="st-metric-val">184</span>
-            <span className="st-metric-delta">↗+12/h</span>
+            <span className="st-metric-val">{stats.totalReplies}</span>
+            {stats.repliesLastHour > 0 && (
+              <span className="st-metric-delta">↗+{stats.repliesLastHour}/h</span>
+            )}
           </div>
-          <Bar value={100} color="#22d3ee" />
+          <Bar value={stats.totalReplies > 0 ? 100 : 0} color="#22d3ee" />
         </div>
 
         <div className="st-metric-card">
@@ -145,10 +208,10 @@ export default function StatisticsPage() {
             <span className="st-metric-icon" style={{ color: '#10b981' }}>⚖</span>
           </div>
           <div className="st-metric-val-row">
-            <span className="st-metric-val">184</span>
-            <span className="st-metric-pct" style={{ color: '#10b981' }}>100%</span>
+            <span className="st-metric-val">{stats.analyzedReplies}</span>
+            <span className="st-metric-pct" style={{ color: '#10b981' }}>{stats.analyzedPercent}%</span>
           </div>
-          <Bar value={100} color="#10b981" />
+          <Bar value={stats.analyzedPercent} color="#10b981" />
         </div>
 
         <div className="st-metric-card">
@@ -157,10 +220,10 @@ export default function StatisticsPage() {
             <span className="st-metric-icon" style={{ color: '#f59e0b' }}>⚠</span>
           </div>
           <div className="st-metric-val-row">
-            <span className="st-metric-val">18</span>
-            <span className="st-metric-pct" style={{ color: '#f87171' }}>9.8%</span>
+            <span className="st-metric-val">{stats.toxic.count}</span>
+            <span className="st-metric-pct" style={{ color: '#f87171' }}>{stats.toxic.percent}%</span>
           </div>
-          <Bar value={9.8} color="#f87171" />
+          <Bar value={stats.toxic.percent} color="#f87171" />
         </div>
 
         <div className="st-metric-card">
@@ -169,10 +232,10 @@ export default function StatisticsPage() {
             <span className="st-metric-icon" style={{ color: '#f87171' }}>🛡</span>
           </div>
           <div className="st-metric-val-row">
-            <span className="st-metric-val">11</span>
-            <span className="st-metric-pct" style={{ color: '#f87171' }}>5.9%</span>
+            <span className="st-metric-val">{stats.hate.count}</span>
+            <span className="st-metric-pct" style={{ color: '#f87171' }}>{stats.hate.percent}%</span>
           </div>
-          <Bar value={5.9} color="#f87171" />
+          <Bar value={stats.hate.percent} color="#f87171" />
         </div>
       </div>
 
@@ -184,18 +247,14 @@ export default function StatisticsPage() {
           <span className="st-section-meta">3 sắc thái</span>
         </div>
         <div className="st-sentiment-body">
-          <Donut />
+          <Donut stats={stats} />
           <div className="st-sentiment-legend">
-            {[
-              { label: 'Tích cực (Positive)',  count: 78,  pct: '42.6%', color: '#10b981' },
-              { label: 'Trung tính (Neutral)', count: 70,  pct: '38.1%', color: '#6b7280' },
-              { label: 'Tiêu cực (Negative)',  count: 36,  pct: '19.3%', color: '#f87171' },
-            ].map(s => (
+            {sentiments.map(s => (
               <div className="st-legend-row" key={s.label}>
                 <span className="st-legend-dot" style={{ background: s.color }} />
                 <span className="st-legend-label">{s.label}</span>
                 <span className="st-legend-val" style={{ color: s.color }}>
-                  {s.count} ({s.pct})
+                  {s.data.count} ({s.data.percent}%)
                 </span>
               </div>
             ))}
@@ -204,100 +263,224 @@ export default function StatisticsPage() {
       </div>
 
       {/* ── Trend chart ── */}
-      <div className="st-section">
-        <div className="st-section-head">
-          <span className="st-section-icon">〜</span>
-          <span className="st-section-title">Xu hướng độc hại theo thời gian</span>
-          <span className="st-section-meta">
-            <span className="st-trend-dot" />
-            T0 → +2h
-          </span>
-        </div>
-        <div className="st-chart-wrap">
-          <LineChart />
-        </div>
-        <div className="st-chart-xaxis">
-          <span>00:00 (Post)</span>
-          <span>+45m</span>
-          <span>+1h 30m</span>
-          <span style={{ color: '#f87171' }}>Hiện tại (+2h)</span>
-        </div>
-        <div className="st-chart-legend">
-          <span className="st-chart-legend-item">
-            <span className="st-chart-dot" style={{ background: '#f87171' }} />
-            Lượng Toxic phản hồi
-          </span>
-          <span className="st-chart-legend-item">
-            <span className="st-chart-dot" style={{ background: '#8b5cf6' }} />
-            Bình luận tiêu cực tổng
-          </span>
-        </div>
-      </div>
+      <TrendSection trend={stats.trend} />
 
       {/* ── Keywords ── */}
       <div className="st-section">
         <div className="st-section-head">
           <span className="st-section-icon">#</span>
           <span className="st-section-title">Từ khóa nổi bật (Top Keywords)</span>
-          <span className="st-section-meta">8 tags chính</span>
+          <span className="st-section-meta">{stats.keywords.length} tags chính</span>
         </div>
-        <div className="st-keywords">
-          {KEYWORDS.map(k => (
-            <span
-              key={k.tag}
-              className="st-kw-chip"
-              style={k.color ? {
-                color: k.color,
-                background: `${k.color}15`,
-                borderColor: `${k.color}30`,
-                fontWeight: k.bold ? 700 : 500,
-              } : {}}
-            >
-              {k.tag} <span className="st-kw-count">{k.count}</span>
-            </span>
-          ))}
+        {stats.keywords.length > 0 ? (
+          <div className="st-keywords">
+            {stats.keywords.map(k => {
+              const color = k.sentiment === 'NEUTRAL' ? null : SENTIMENT_COLORS[k.sentiment];
+              return (
+                <span
+                  key={k.term}
+                  className="st-kw-chip"
+                  style={color ? {
+                    color,
+                    background: `${color}15`,
+                    borderColor: `${color}30`,
+                    fontWeight: 700,
+                  } : {}}
+                >
+                  #{k.term} <span className="st-kw-count">{k.count}</span>
+                </span>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="st-empty">Chưa đủ dữ liệu: cần ít nhất 2 bình luận đã phân tích chứa cùng một từ.</p>
+        )}
+      </div>
+    </>
+  );
+}
+
+export default function StatisticsPage() {
+  const [posts, setPosts] = useState([]);
+  const [postsLoading, setPostsLoading] = useState(true);
+  const [selectedPostId, setSelectedPostId] = useState(null);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [exportFormat, setExportFormat] = useState('csv');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState(null);
+
+  useEffect(() => {
+    let ignore = false;
+    apiService.getPosts()
+      .then(list => {
+        if (ignore) return;
+        setPosts(list || []);
+        setSelectedPostId(list?.[0]?.id ?? null);
+      })
+      .catch(err => {
+        if (!ignore) setError(err.message);
+      })
+      .finally(() => {
+        if (!ignore) setPostsLoading(false);
+      });
+    return () => { ignore = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedPostId) return undefined;
+    let ignore = false;
+    apiService.getPostStatistics(selectedPostId)
+      .then(stats => {
+        if (!ignore) setResult({ postId: selectedPostId, stats });
+      })
+      .catch(err => {
+        if (!ignore) setResult({ postId: selectedPostId, error: err.message });
+      });
+    return () => { ignore = true; };
+  }, [selectedPostId]);
+
+  // Chỉ dùng kết quả của đúng bài đang chọn, để không hiện số liệu bài cũ khi đang tải bài mới
+  const current = result?.postId === selectedPostId ? result : null;
+  const stats = current?.stats ?? null;
+  const pageError = error ?? current?.error ?? null;
+  const loading = postsLoading || (selectedPostId !== null && current === null);
+  const badge = stats ? STATUS_BADGES[stats.status] : null;
+
+  const pendingReplies = stats ? Math.max(0, stats.totalReplies - stats.analyzedReplies) : 0;
+
+  const handleSelectPost = (postId) => {
+    setExportError(null);
+    setAnalyzeError(null);
+    setSelectedPostId(postId);
+  };
+
+  const handleAnalyze = async () => {
+    setAnalyzing(true);
+    setAnalyzeError(null);
+    try {
+      await apiService.analyzePost(selectedPostId);
+      const fresh = await apiService.getPostStatistics(selectedPostId);
+      setResult({ postId: selectedPostId, stats: fresh });
+    } catch (err) {
+      setAnalyzeError(`${err.message}. Hãy chắc chắn AI Service đang chạy.`);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleExport = async () => {
+    if (!selectedPostId) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      const blob = await apiService.exportPostStatistics(selectedPostId, exportFormat);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `thong-ke-${selectedPostId}.${exportFormat}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err.message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <div className="st-wrap">
+
+      {/* ── Hero card ── */}
+      <div className="st-hero">
+        <div className="st-hero-left">
+          <div className="st-hero-title-row">
+            <span className="st-hero-icon">〜</span>
+            <h2 className="st-hero-title">Thống kê Threads Post</h2>
+          </div>
+          <p className="st-hero-sub">
+            {stats ? `Báo cáo tổng quan dữ liệu ${stats.totalReplies} replies` : 'Báo cáo tổng quan theo bài viết'}
+          </p>
         </div>
+        {badge && (
+          <span className={`st-hero-badge ${badge.modifier}`}>
+            <span className="st-hero-badge-dot" />
+            {badge.label}
+          </span>
+        )}
       </div>
 
-      {/* ── Model performance ── */}
-      <div className="st-section">
-        <div className="st-section-head">
-          <span className="st-section-icon">⚙</span>
-          <span className="st-section-title">Hiệu năng mô hình (PhoBERT)</span>
-          <span className="st-badge-cyan">v2.1 VN</span>
-        </div>
-        <div className="st-perf-grid">
-          {[
-            { label: 'ACCURACY',    val: '94.8%', color: '#10b981' },
-            { label: 'MACRO F1',    val: '92.6%', color: '#22d3ee' },
-            { label: 'WEIGHTED F1', val: '95.1%', color: '#8b5cf6' },
-          ].map(p => (
-            <div className="st-perf-item" key={p.label}>
-              <span className="st-perf-label">{p.label}</span>
-              <span className="st-perf-val" style={{ color: p.color }}>{p.val}</span>
-              <Bar value={parseFloat(p.val)} color={p.color} />
-            </div>
+      {/* ── Chọn bài viết ── */}
+      {posts.length > 0 && (
+        <select
+          className="st-post-select"
+          aria-label="Chọn bài viết"
+          value={selectedPostId ?? ''}
+          disabled={analyzing}
+          onChange={e => handleSelectPost(e.target.value)}
+        >
+          {posts.map(p => (
+            <option key={p.id} value={p.id}>
+              {p.text?.trim() ? p.text.trim().slice(0, 70) : `Bài viết ${p.id}`}
+            </option>
           ))}
-        </div>
-        <p className="st-perf-note">
-          Benchmark trên tập dữ liệu UIT-VSMEC &amp; Threads VN Corpus
+        </select>
+      )}
+
+      {pageError && <p className="st-error">⚠️ {pageError}</p>}
+      {loading && <p className="st-empty">Đang tải thống kê...</p>}
+      {!loading && !pageError && posts.length === 0 && (
+        <p className="st-empty">Chưa có bài viết nào để thống kê.</p>
+      )}
+
+      {stats && !stats.repliesSynced && (
+        <p className="st-error">
+          ⚠️ Không lấy được reply từ Threads, số liệu dưới đây chỉ từ dữ liệu đã lưu. Hãy thử đăng nhập lại.
         </p>
-      </div>
+      )}
+
+      {pendingReplies > 0 && (
+        <div className="st-analyze">
+          <span className="st-analyze-text">{pendingReplies} reply chưa được phân tích</span>
+          <button className="st-analyze-btn" onClick={handleAnalyze} disabled={analyzing}>
+            {analyzing ? 'Đang phân tích...' : 'Phân tích ngay'}
+          </button>
+        </div>
+      )}
+      {analyzeError && <p className="st-error">⚠️ {analyzeError}</p>}
+
+      {stats && <StatisticsContent stats={stats} />}
 
       {/* ── Export ── */}
-      <button className="st-export-btn">
-        ↑ Xuất dữ liệu báo cáo
-      </button>
-      <div className="st-export-formats">
-        {['.CSV', '.JSON', '.XLSX'].map(f => (
-          <button key={f} className="st-format-btn">
-            <span className="st-format-icon">
-              {f === '.CSV' ? '⊞' : f === '.JSON' ? '{}' : '📄'}
-            </span>
-            {f}
+      {stats && (
+        <>
+          <button
+            className="st-export-btn"
+            onClick={handleExport}
+            disabled={exporting || stats.totalReplies === 0}
+          >
+            ↑ {exporting ? 'Đang xuất...' : 'Xuất dữ liệu báo cáo'}
           </button>
-        ))}
-      </div>
+          <div className="st-export-formats">
+            {EXPORT_FORMATS.map(f => (
+              <button
+                key={f.id}
+                className={`st-format-btn ${exportFormat === f.id ? 'st-format-btn--active' : ''}`}
+                aria-pressed={exportFormat === f.id}
+                onClick={() => setExportFormat(f.id)}
+              >
+                <span className="st-format-icon">{f.icon}</span>
+                {f.label}
+              </button>
+            ))}
+          </div>
+          {exportError && <p className="st-error">⚠️ {exportError}</p>}
+        </>
+      )}
 
     </div>
   );
