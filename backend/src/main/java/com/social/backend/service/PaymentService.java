@@ -134,6 +134,22 @@ public class PaymentService {
         // Đảm bảo user_id tồn tại trong bảng app_users để không bị lỗi khóa ngoại foreign key
         Long appUserId = getOrCreateAppUserId(user);
 
+        // Kiểm tra nếu người dùng đã có gói VIP còn hiệu lực thì không cho phép mua thêm
+        OffsetDateTime now = OffsetDateTime.now();
+        Optional<UserSubscription> currentActive = userSubscriptionRepository
+                .findFirstByUserIdAndStatusOrderByEndAtDesc(appUserId, "ACTIVE");
+        if (currentActive.isEmpty() && !appUserId.equals(user.getId())) {
+            currentActive = userSubscriptionRepository
+                    .findFirstByUserIdAndStatusOrderByEndAtDesc(user.getId(), "ACTIVE");
+        }
+
+        if (currentActive.isPresent()) {
+            UserSubscription sub = currentActive.get();
+            if (sub.getEndAt() == null || sub.getEndAt().isAfter(now)) {
+                throw new IllegalStateException("Bạn đang có gói VIP còn hiệu lực. Vui lòng sử dụng hết thời hạn trước khi đăng ký gói mới.");
+            }
+        }
+
         // Tạo mã đơn hàng duy nhất (chữ số, tối đa an toàn 9 số)
         long orderCode = (System.currentTimeMillis() % 900000000L) + 100000000L;
 
@@ -232,18 +248,31 @@ public class PaymentService {
     }
 
     /**
-     * Xử lý webhook từ PayOS khi giao dịch thành công
+     * Xử lý webhook từ PayOS khi giao dịch thành công.
+     * <p>
+     * Cấu trúc payload PayOS gửi về:
+     * <pre>
+     * {
+     *   "code": "00",
+     *   "desc": "success",
+     *   "success": true,
+     *   "data": { "orderCode": ..., "amount": ..., ... },
+     *   "signature": "..."
+     * }
+     * </pre>
+     * - "code" và "desc" nằm ở ROOT của payload (không phải trong "data").
+     * - "signature" được tính từ toàn bộ fields trong "data" theo alphabet.
      */
     @Transactional
     public boolean handlePayOSWebhook(JsonNode webhookPayload) {
         log.info("Nhận Webhook từ PayOS: {}", webhookPayload);
 
         if (webhookPayload == null || !webhookPayload.has("data")) {
+            log.warn("PayOS webhook payload rỗng hoặc thiếu trường 'data'.");
             return true;
         }
 
         JsonNode data = webhookPayload.get("data");
-        String signature = webhookPayload.has("signature") ? webhookPayload.get("signature").asText() : "";
 
         // Nhận diện gói tin test từ PayOS khi bấm "Lưu Webhook" trên Dashboard (orderCode = 123)
         if (data.has("orderCode") && data.get("orderCode").asLong() == 123L) {
@@ -251,29 +280,44 @@ public class PaymentService {
             return true;
         }
 
-        // Xác thực chữ ký PayOS
+        // Chữ ký nằm ở ROOT payload, không phải trong data
+        String signature = webhookPayload.has("signature") ? webhookPayload.get("signature").asText() : "";
+
+        // Xác thực chữ ký PayOS (ký từ nội dung "data")
         if (payOSService.isConfigured() && !payOSService.verifyWebhookSignature(data, signature)) {
-            log.warn("Chữ ký PayOS Webhook không hợp lệ!");
-            return false;
+            log.warn("Chữ ký PayOS Webhook không hợp lệ! Bỏ qua webhook này.");
+            // Vẫn trả về true để PayOS không retry vô tận; log để debug
+            return true;
         }
 
         if (!data.has("orderCode")) {
+            log.warn("PayOS webhook data thiếu trường 'orderCode'.");
             return false;
         }
 
         long orderCodeLong = data.get("orderCode").asLong();
         String orderCode = String.valueOf(orderCodeLong);
 
-        String code = data.has("code") ? data.get("code").asText() : "";
-        String desc = data.has("desc") ? data.get("desc").asText() : "";
+        // "code" và "desc" ở ROOT payload (PayOS v2 spec)
+        String code = webhookPayload.has("code") ? webhookPayload.get("code").asText() : "";
+        String desc = webhookPayload.has("desc") ? webhookPayload.get("desc").asText() : "";
+        // Fallback: một số phiên bản PayOS cũng đặt trong data
+        if (code.isBlank() && data.has("code")) code = data.get("code").asText();
+        if (desc.isBlank() && data.has("desc")) desc = data.get("desc").asText();
+
+        // Lấy reference từ data (mã tham chiếu ngân hàng)
         String reference = data.has("reference") ? data.get("reference").asText() : "";
 
-        // code == "00" hoặc desc chứa success nghĩa là chuyển khoản thành công
+        log.info("PayOS webhook - orderCode={}, code={}, desc={}", orderCode, code, desc);
+
+        // code == "00" hoặc desc == "success" => giao dịch thành công
         if ("00".equals(code) || "success".equalsIgnoreCase(desc)) {
             activateSuccessfulPayment(orderCode, reference);
             return true;
         }
 
+        // Trường hợp bị hủy hoặc thất bại
+        log.info("PayOS webhook không phải thành công: code={}, desc={}", code, desc);
         return true;
     }
 
