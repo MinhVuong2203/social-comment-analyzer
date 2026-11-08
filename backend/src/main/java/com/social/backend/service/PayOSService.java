@@ -1,7 +1,8 @@
 package com.social.backend.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -37,9 +38,7 @@ public class PayOSService {
 
     public PayOSService(RestClient.Builder restClientBuilder) {
         this.restClient = restClientBuilder.baseUrl(PAYOS_API_BASE).build();
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.findAndRegisterModules();
-        this.objectMapper = mapper;
+        this.objectMapper = JsonMapper.builder().build();
     }
 
     public boolean isConfigured() {
@@ -172,30 +171,46 @@ public class PayOSService {
     }
 
     /**
-     * Xác thực chữ ký webhook từ PayOS
+     * Xác thực chữ ký webhook từ PayOS.
+     * PayOS ký toàn bộ các field trong "data" theo thứ tự alphabet,
+     * nối thành chuỗi key=value&key=value rồi HMAC-SHA256 với checksum key.
+     * Lưu ý: chỉ ký các field có kiểu nguyên thủy (string/number/boolean), bỏ qua object/array.
      */
     public boolean verifyWebhookSignature(JsonNode dataNode, String receivedSignature) {
-        if (!isConfigured() || dataNode == null || receivedSignature == null) {
+        if (!isConfigured() || dataNode == null || receivedSignature == null || receivedSignature.isBlank()) {
+            log.warn("verifyWebhookSignature: thiếu cấu hình hoặc thiếu signature");
             return false;
         }
 
         try {
-            // Sắp xếp các key trong dataNode theo alphabet
-            List<String> fieldNames = new ArrayList<>();
-            dataNode.fieldNames().forEachRemaining(fieldNames::add);
+            // Lấy tất cả field-name từ dataNode, sắp xếp theo alphabet (PayOS quy định)
+            // Jackson 3.x (tools.jackson): propertyNames() trả về Collection<String>
+            List<String> fieldNames = new ArrayList<>(dataNode.propertyNames());
             Collections.sort(fieldNames);
 
             StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < fieldNames.size(); i++) {
-                String key = fieldNames.get(i);
+            boolean first = true;
+            for (String key : fieldNames) {
                 JsonNode valueNode = dataNode.get(key);
+                // PayOS chỉ ký các field primitive, bỏ qua nested object/array
+                if (valueNode == null || valueNode.isObject() || valueNode.isArray()) {
+                    continue;
+                }
                 String valueStr = valueNode.isNull() ? "" : valueNode.asText();
-                if (i > 0) sb.append("&");
+                if (!first) sb.append("&");
                 sb.append(key).append("=").append(valueStr);
+                first = false;
             }
 
-            String calculatedSig = hmacSha256(sb.toString(), checksumKey.trim());
-            return calculatedSig.equalsIgnoreCase(receivedSignature.trim());
+            String dataString = sb.toString();
+            log.debug("PayOS webhook data string to verify: {}", dataString);
+
+            String calculatedSig = hmacSha256(dataString, checksumKey.trim());
+            boolean valid = calculatedSig.equalsIgnoreCase(receivedSignature.trim());
+            if (!valid) {
+                log.warn("PayOS webhook signature mismatch. Expected: {}, Received: {}", calculatedSig, receivedSignature.trim());
+            }
+            return valid;
         } catch (Exception e) {
             log.error("Lỗi khi xác thực chữ ký PayOS webhook: {}", e.getMessage());
             return false;
