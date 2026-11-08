@@ -1,7 +1,8 @@
 package com.social.backend.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -37,9 +38,7 @@ public class PayOSService {
 
     public PayOSService(RestClient.Builder restClientBuilder) {
         this.restClient = restClientBuilder.baseUrl(PAYOS_API_BASE).build();
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.findAndRegisterModules();
-        this.objectMapper = mapper;
+        this.objectMapper = JsonMapper.builder().build();
     }
 
     public boolean isConfigured() {
@@ -182,7 +181,7 @@ public class PayOSService {
         try {
             // Sắp xếp các key trong dataNode theo alphabet
             List<String> fieldNames = new ArrayList<>();
-            dataNode.fieldNames().forEachRemaining(fieldNames::add);
+            dataNode.propertyNames().forEach(fieldNames::add);
             Collections.sort(fieldNames);
 
             StringBuilder sb = new StringBuilder();
