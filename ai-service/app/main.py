@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import API_KEY, BATCH_SIZE, LABELS
 from .model_manager import ModelManager
+from .preprocessing import get_teencode_stats
 from .schemas import (
     PredictRequest,
     SinglePredictResponse,
@@ -63,6 +64,7 @@ def health():
             name: (name in manager.models)
             for name in LABELS
         },
+        "teencode": get_teencode_stats(),
     }
 
 
