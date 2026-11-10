@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Minus, X, LogOut, Crown } from 'lucide-react';
+import { Settings, Minus, X, LogOut } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import './Header.css';
@@ -44,6 +44,31 @@ export default function Header() {
         </div>
 
         <div className="header-top-right">
+          {/* Clickable User Profile Badge with Avatar */}
+          <div 
+            className="user-profile-badge"
+            onClick={() => navigate('/profile')}
+            title="Nhấn để xem trang cá nhân & mua gói VIP"
+          >
+            {user?.profilePicture ? (
+              <img 
+                src={user.profilePicture} 
+                alt="Avatar" 
+                className="user-avatar-img" 
+              />
+            ) : (
+              <div className="user-avatar-fallback">
+                {(user?.name || user?.username || 'U').charAt(0).toUpperCase()}
+              </div>
+            )}
+
+            <span className="status-dot" />
+
+            <span className="user-badge-name">
+              {user?.name || (user?.username ? `@${user.username}` : 'Cá nhân & VIP')}
+            </span>
+          </div>
+
           <button
             type="button"
             className="btn-logout"
@@ -75,39 +100,6 @@ export default function Header() {
             />
           </div>
         </div>
-      </div>
-
-      <div className="header-status">
-        {/* Clickable User Profile Badge with Avatar */}
-        <div 
-          className="user-profile-badge"
-          onClick={() => navigate('/profile')}
-          title="Nhấn để xem trang cá nhân & mua gói VIP"
-        >
-          {user?.profilePicture ? (
-            <img 
-              src={user.profilePicture} 
-              alt="Avatar" 
-              className="user-avatar-img" 
-            />
-          ) : (
-            <div className="user-avatar-fallback">
-              {(user?.name || user?.username || 'U').charAt(0).toUpperCase()}
-            </div>
-          )}
-
-          <span className="status-dot" />
-
-          <span className="user-badge-name">
-            {user?.name || (user?.username ? `@${user.username}` : 'Cá nhân & VIP')}
-          </span>
-
-          <span className="vip-indicator-pill">
-            {user?.isVip ? '👑 VIP' : 'UPGRADE'}
-          </span>
-        </div>
-
-        <div className="status-version">V2.1.4 PRO</div>
       </div>
 
       <div className="header-tabs">
