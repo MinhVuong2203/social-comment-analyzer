@@ -3,6 +3,7 @@ package com.social.backend.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.social.backend.dto.AdminDto;
 import com.social.backend.entity.User;
+import com.social.backend.service.AdminAuditLogService;
 import com.social.backend.service.AnalysisService;
 import com.social.backend.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +38,9 @@ class AdminUserControllerTest {
 
     @Mock
     private AnalysisService analysisService;
+
+    @Mock
+    private AdminAuditLogService auditLogService;
 
     @InjectMocks
     private AdminController adminController;
