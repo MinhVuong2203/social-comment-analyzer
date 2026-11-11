@@ -12,14 +12,24 @@ import {
   Flame,
   ExternalLink,
   ShieldCheck,
-  AlertTriangle
+  AlertTriangle,
+  History,
+  Crown,
+  UserX,
+  UserCheck,
+  Shield,
+  X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { 
   getAdminDashboardData, 
   getChartAnalysisStats,
+  getAdminAuditLogs,
   formatCompactNumber, 
-  formatCurrency 
+  formatCurrency,
+  formatRelativeTime,
+  formatExactDateTime,
+  formatAuditDescription
 } from '../services/adminDashboardService';
 
 // Biểu đồ tròn khuyết SVG (Donut Chart)
@@ -113,8 +123,28 @@ export default function AdminDashboardPage() {
     planCount: 3,
     sentimentStats: null,
     toxicPosts: [],
+    auditLogs: [],
     isBackendConnected: false
   });
+
+  // State Modal xem toàn bộ 50 nhật ký hoạt động
+  const [showAuditModal, setShowAuditModal] = useState(false);
+  const [allAuditLogs, setAllAuditLogs] = useState([]);
+  const [loadingAllAuditLogs, setLoadingAllAuditLogs] = useState(false);
+  const [auditModalFilter, setAuditModalFilter] = useState('ALL'); // ALL, LOCK_USER, UNLOCK_USER, GRANT_VIP, PLAN, SYSTEM
+
+  const handleOpenAuditModal = async () => {
+    setShowAuditModal(true);
+    setLoadingAllAuditLogs(true);
+    try {
+      const logs = await getAdminAuditLogs(50);
+      setAllAuditLogs(Array.isArray(logs) ? logs : []);
+    } catch (e) {
+      console.warn("Lỗi tải 50 nhật ký hoạt động:", e);
+    } finally {
+      setLoadingAllAuditLogs(false);
+    }
+  };
 
   // Tải dữ liệu Dashboard tổng quát theo mốc thời gian lọc ở trên
   const loadDashboardData = async (timeRange = globalTimeRange, isManual = false) => {
@@ -246,6 +276,17 @@ export default function AdminDashboardPage() {
   const filteredRecentUsers = dashboardData.recentUsers.filter(u => {
     if (globalMemberSegment === 'VIP_ONLY') return u.plan !== 'FREE';
     if (globalMemberSegment === 'FREE_ONLY') return u.plan === 'FREE';
+    return true;
+  });
+
+  // Lọc danh sách 50 nhật ký hoạt động trong Modal
+  const filteredModalLogs = allAuditLogs.filter((log) => {
+    if (auditModalFilter === 'ALL') return true;
+    if (auditModalFilter === 'LOCK_USER') return log.action === 'LOCK_USER';
+    if (auditModalFilter === 'UNLOCK_USER') return log.action === 'UNLOCK_USER';
+    if (auditModalFilter === 'GRANT_VIP') return log.action === 'GRANT_VIP';
+    if (auditModalFilter === 'PLAN') return log.action?.includes('PLAN');
+    if (auditModalFilter === 'ADMIN_LOGIN') return log.action === 'ADMIN_LOGIN';
     return true;
   });
 
@@ -701,9 +742,9 @@ export default function AdminDashboardPage() {
                 <div className="font-semibold text-[12px] text-[#f1f5f9] group-hover:text-[#4cd7f6] transition">
                   Quản lý Người dùng
                 </div>
-                <div className="text-[10px] text-[#94a3b8]">
-                  Xem danh sách {loading ? '...' : formatCompactNumber(dashboardData.totalUsers)} user & tài khoản Threads
-                </div>
+                {/* <div className="text-[10px] text-[#94a3b8]">
+                  Xem danh sách {loading ? '...' : formatCompactNumber(dashboardData.totalUsers)} user & tài khoản Threads 
+                </div> */}
               </div>
             </div>
             <ChevronRight size={15} className="text-[#94a3b8] group-hover:text-[#4cd7f6] group-hover:translate-x-0.5 transition" />
@@ -722,9 +763,9 @@ export default function AdminDashboardPage() {
                 <div className="font-semibold text-[12px] text-[#f1f5f9] group-hover:text-[#c0c1ff] transition">
                   Quản lý Gói đăng ký
                 </div>
-                <div className="text-[10px] text-[#94a3b8]">
+                {/* <div className="text-[10px] text-[#94a3b8]">
                   Cấu hình {dashboardData.planCount} gói (Free, VIP 30 ngày, VIP 90 ngày,...)
-                </div>
+                </div> */}
               </div>
             </div>
             <ChevronRight size={15} className="text-[#94a3b8] group-hover:text-[#c0c1ff] group-hover:translate-x-0.5 transition" />
@@ -812,7 +853,227 @@ export default function AdminDashboardPage() {
             })}
           </div>
         </div>
+
+        {/* Khối Nhật ký hoạt động quản trị (Admin Audit Log) */}
+        <div className="bg-[#1a1a2e] border border-white/10 rounded-lg p-2.5 space-y-2">
+          <div className="flex items-center justify-between border-b border-white/10 pb-1.5">
+            <div className="flex items-center space-x-1.5">
+              <History size={13} className="text-[#c0c1ff]" />
+              <span className="font-semibold text-[11px] text-[#f1f5f9]">
+                Nhật ký hoạt động quản trị
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-[10px] text-[#94a3b8] font-['JetBrains_Mono']">
+                Gần đây
+              </span>
+              <button
+                onClick={handleOpenAuditModal}
+                className="text-[10px] text-[#4cd7f6] hover:text-[#7ce5f8] hover:underline flex items-center space-x-0.5 cursor-pointer font-['JetBrains_Mono'] transition-colors"
+                title="Xem tối đa 50 nhật ký hoạt động gần nhất"
+              >
+                <span>Xem thêm (50)</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="divide-y divide-white/5">
+            {dashboardData.auditLogs && dashboardData.auditLogs.length > 0 ? (
+              dashboardData.auditLogs.map((log) => {
+                const isLock = log.action === 'LOCK_USER';
+                const isUnlock = log.action === 'UNLOCK_USER';
+                const isVip = log.action === 'GRANT_VIP';
+                const isPlan = log.action?.includes('PLAN');
+
+                const actionBadge = isLock
+                  ? { text: 'Khóa', color: 'bg-[#93000a]/20 text-[#ffb4ab] border-[#ffb4ab]/30', icon: <UserX size={10} /> }
+                  : isUnlock
+                  ? { text: 'Mở khóa', color: 'bg-[#4edea3]/15 text-[#4edea3] border-[#4edea3]/30', icon: <UserCheck size={10} /> }
+                  : isVip
+                  ? { text: 'Cấp VIP', color: 'bg-amber-500/15 text-amber-300 border-amber-500/30', icon: <Crown size={10} /> }
+                  : isPlan
+                  ? { text: 'Gói VIP', color: 'bg-[#c0c1ff]/15 text-[#c0c1ff] border-[#c0c1ff]/30', icon: <CreditCard size={10} /> }
+                  : { text: 'Hệ thống', color: 'bg-white/5 text-[#94a3b8] border-white/10', icon: <Shield size={10} /> };
+
+                return (
+                  <div key={log.id} className="py-2 flex items-start justify-between gap-2 text-[11px]">
+                    <div className="flex items-start space-x-2">
+                      <span className={`mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-['JetBrains_Mono'] font-medium border flex items-center space-x-1 shrink-0 ${actionBadge.color}`}>
+                        {actionBadge.icon}
+                        <span>{actionBadge.text}</span>
+                      </span>
+                      <div className="space-y-0.5">
+                        <div className="text-white/90 leading-tight">
+                          {formatAuditDescription(log.description)}
+                        </div>
+                        <div className="text-[9px] text-[#94a3b8] flex items-center space-x-1.5 font-['JetBrains_Mono'] flex-wrap">
+                          <span className="text-[#4cd7f6]">@{log.adminUsername || 'admin'}</span>
+                          <span>•</span>
+                          <span className="text-[#f1f5f9]">{formatRelativeTime(log.createdAt)}</span>
+                          {log.createdAt && (
+                            <>
+                              <span>•</span>
+                              <span className="text-[#64748b]">({formatExactDateTime(log.createdAt)})</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="py-3 text-center text-[#94a3b8] text-[10px]">
+                Chưa có hoạt động quản trị nào được ghi nhận.
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* Modal Popup hiển thị 50 nhật ký hoạt động quản trị gần nhất */}
+      {showAuditModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
+          <div className="bg-[#13131f] border border-white/15 rounded-xl max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[88vh]">
+            {/* Header Modal */}
+            <div className="p-3.5 sm:p-4 border-b border-white/10 flex items-center justify-between bg-[#1a1a2e]">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-1.5 rounded-lg bg-[#c0c1ff]/10 text-[#c0c1ff]">
+                  <History size={18} />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h3 className="font-bold text-sm sm:text-base text-white">
+                      Nhật ký hoạt động quản trị hệ thống
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-['JetBrains_Mono'] bg-[#4cd7f6]/10 text-[#4cd7f6] border border-[#4cd7f6]/30">
+                      Tối đa 50 gần nhất
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#94a3b8] mt-0.5">
+                    Theo dõi toàn bộ lịch sử thao tác của các quản trị viên trên hệ thống
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAuditModal(false)}
+                className="p-1.5 rounded-lg text-[#94a3b8] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                title="Đóng modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Filter Tabs */}
+            <div className="px-3.5 sm:px-4 py-2 border-b border-white/10 bg-[#161626] flex items-center space-x-1.5 overflow-x-auto text-[11px]">
+              {[
+                { id: 'ALL', label: 'Tất cả' },
+                { id: 'LOCK_USER', label: 'Khóa user' },
+                { id: 'UNLOCK_USER', label: 'Mở khóa' },
+                { id: 'GRANT_VIP', label: 'Cấp VIP' },
+                { id: 'PLAN', label: 'Gói VIP' },
+                { id: 'ADMIN_LOGIN', label: 'Đăng nhập' },
+              ].map((tab) => {
+                const isActive = auditModalFilter === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setAuditModalFilter(tab.id)}
+                    className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer whitespace-nowrap font-medium ${
+                      isActive
+                        ? 'bg-[#4cd7f6]/15 text-[#4cd7f6] border border-[#4cd7f6]/40 font-semibold'
+                        : 'text-[#94a3b8] hover:text-white hover:bg-white/5 border border-transparent'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Content List 50 Logs */}
+            <div className="p-3.5 sm:p-4 overflow-y-auto space-y-2.5 max-h-[58vh]">
+              {loadingAllAuditLogs ? (
+                <div className="py-12 flex flex-col items-center justify-center space-y-2 text-[#94a3b8]">
+                  <RefreshCw size={20} className="animate-spin text-[#4cd7f6]" />
+                  <span className="text-xs">Đang tải nhật ký hoạt động...</span>
+                </div>
+              ) : filteredModalLogs.length > 0 ? (
+                <div className="divide-y divide-white/5">
+                  {filteredModalLogs.map((log) => {
+                    const isLock = log.action === 'LOCK_USER';
+                    const isUnlock = log.action === 'UNLOCK_USER';
+                    const isVip = log.action === 'GRANT_VIP';
+                    const isPlan = log.action?.includes('PLAN');
+                    const isLogin = log.action === 'ADMIN_LOGIN';
+
+                    const actionBadge = isLock
+                      ? { text: 'Khóa user', color: 'bg-[#93000a]/25 text-[#ffb4ab] border-[#ffb4ab]/40', icon: <UserX size={11} /> }
+                      : isUnlock
+                      ? { text: 'Mở khóa', color: 'bg-[#4edea3]/20 text-[#4edea3] border-[#4edea3]/40', icon: <UserCheck size={11} /> }
+                      : isVip
+                      ? { text: 'Cấp VIP', color: 'bg-amber-500/20 text-amber-300 border-amber-500/40', icon: <Crown size={11} /> }
+                      : isPlan
+                      ? { text: 'Gói VIP', color: 'bg-[#c0c1ff]/20 text-[#c0c1ff] border-[#c0c1ff]/40', icon: <CreditCard size={11} /> }
+                      : isLogin
+                      ? { text: 'Đăng nhập', color: 'bg-blue-500/20 text-blue-300 border-blue-500/40', icon: <Shield size={11} /> }
+                      : { text: 'Hệ thống', color: 'bg-white/10 text-[#94a3b8] border-white/15', icon: <Shield size={11} /> };
+
+                    return (
+                      <div
+                        key={log.id}
+                        className="py-2.5 first:pt-0 last:pb-0 flex items-start justify-between gap-3 text-xs hover:bg-white/[0.02] px-2 rounded-lg transition-colors"
+                      >
+                        <div className="flex items-start space-x-2.5 flex-1 min-w-0">
+                          <span
+                            className={`mt-0.5 px-2 py-0.5 rounded text-[10px] font-['JetBrains_Mono'] font-medium border flex items-center space-x-1 shrink-0 ${actionBadge.color}`}
+                          >
+                            {actionBadge.icon}
+                            <span>{actionBadge.text}</span>
+                          </span>
+                          <div className="space-y-1 min-w-0 flex-1">
+                            <div className="text-white/95 leading-relaxed break-words font-medium">
+                              {formatAuditDescription(log.description)}
+                            </div>
+                            <div className="text-[10px] text-[#94a3b8] flex items-center space-x-1.5 font-['JetBrains_Mono'] flex-wrap">
+                              <span className="text-[#4cd7f6] font-semibold">@{log.adminUsername || 'admin'}</span>
+                              <span>•</span>
+                              <span className="text-[#e2e8f0]">{formatRelativeTime(log.createdAt)}</span>
+                              {log.createdAt && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-[#94a3b8]">({formatExactDateTime(log.createdAt)})</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="py-12 text-center text-[#94a3b8] text-xs">
+                  Không tìm thấy hoạt động quản trị nào phù hợp bộ lọc.
+                </div>
+              )}
+            </div>
+
+            {/* Footer Modal */}
+            <div className="p-3 sm:px-4 border-t border-white/10 bg-[#161626] flex items-center justify-between text-xs">
+              <span className="text-[#94a3b8] font-['JetBrains_Mono'] text-[11px]">
+                Hiển thị <span className="text-white font-semibold">{filteredModalLogs.length}</span> / {allAuditLogs.length} hoạt động
+              </span>
+              <button
+                onClick={() => setShowAuditModal(false)}
+                className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white transition-colors cursor-pointer text-[11px] font-medium"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

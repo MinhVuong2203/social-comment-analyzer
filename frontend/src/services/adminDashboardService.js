@@ -61,6 +61,32 @@ export const formatRelativeTime = (dateInput) => {
   return date.toLocaleDateString("vi-VN");
 };
 
+// Định dạng ngày giờ chi tiết (ví dụ: "12:15, 11/11/2026")
+export const formatExactDateTime = (dateInput) => {
+  if (!dateInput) return "";
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) return "";
+  return date.toLocaleString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
+
+// Chuẩn hóa mô tả nhật ký hoạt động (đổi mã biến sang tiếng Việt, dọn dẹp format)
+export const formatAuditDescription = (desc) => {
+  if (!desc) return "";
+  return desc
+    .replace(/\b1_DAY\b/g, "1 ngày")
+    .replace(/\b7_DAYS\b/g, "7 ngày")
+    .replace(/\b30_DAYS\b/g, "30 ngày")
+    .replace(/\bPERMANENT\b/g, "Vĩnh viễn")
+    .replace(/,\s*Lý do:\s*\)/g, ")")
+    .replace(/\(Thời hạn:\s*,\s*Lý do:\s*/g, "(Lý do: ");
+};
+
 // Lấy thống kê phân tích độc lập cho Biểu đồ (theo mốc ngày thực tế)
 export const getChartAnalysisStats = async (days = null) => {
   const headers = getAdminHeaders();
@@ -124,6 +150,24 @@ export const getToxicPostsAlerts = async (limit = 3) => {
   }
 };
 
+// Lấy danh sách nhật ký hoạt động quản trị gần nhất
+export const getAdminAuditLogs = async (limit = 5) => {
+  const headers = getAdminHeaders();
+  const fetchOptions = {
+    method: "GET",
+    credentials: "include",
+    headers,
+  };
+  try {
+    const res = await fetch(`${API_URL}/api/admin/audit-logs?limit=${limit}`, fetchOptions);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch (err) {
+    console.warn("Lỗi lấy nhật ký hoạt động quản trị:", err.message);
+    return [];
+  }
+};
+
 // Lấy toàn bộ số liệu cho Admin Dashboard (hỗ trợ lọc thời gian thực tế từ backend)
 export const getAdminDashboardData = async ({ days = null } = {}) => {
   const headers = getAdminHeaders();
@@ -183,13 +227,22 @@ export const getAdminDashboardData = async ({ days = null } = {}) => {
       return [];
     });
 
-  const [stats, subStats, vipPlans, users, subscriptions, toxicPosts] = await Promise.all([
+  // 7. Fetch danh sách nhật ký hoạt động quản trị gần nhất
+  const auditLogsPromise = fetch(`${API_URL}/api/admin/audit-logs?limit=5`, fetchOptions)
+    .then(async (res) => (res.ok ? await res.json() : []))
+    .catch((err) => {
+      console.warn("Lỗi lấy /api/admin/audit-logs:", err.message);
+      return [];
+    });
+
+  const [stats, subStats, vipPlans, users, subscriptions, toxicPosts, auditLogs] = await Promise.all([
     statsPromise,
     subStatsPromise,
     plansPromise,
     usersPromise,
     subsPromise,
     toxicPostsPromise,
+    auditLogsPromise,
   ]);
 
   // Nếu cả 2 API thống kê chính đều null -> có thể backend chưa bật hoặc mất kết nối
@@ -330,5 +383,6 @@ export const getAdminDashboardData = async ({ days = null } = {}) => {
     planCount: Array.isArray(vipPlans) && vipPlans.length > 0 ? vipPlans.length : 3,
     sentimentStats,
     toxicPosts: Array.isArray(toxicPosts) ? toxicPosts : [],
+    auditLogs: Array.isArray(auditLogs) ? auditLogs : [],
   };
 };
