@@ -6,34 +6,27 @@ import {
   Sparkles, 
   CreditCard, 
   Clock, 
-  Calendar, 
   AlertCircle, 
-  ExternalLink, 
   RefreshCw, 
-  X,
-  ShieldCheck,
   CheckCircle2
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
   getUserProfile, 
   createPayOSPayment, 
-  checkPaymentStatus, 
-  cancelPayOSPayment 
+  checkPaymentStatus
 } from '../services/paymentService';
 
 export default function ProfilePage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user: authUser } = useAuth();
 
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [paymentLoading, setPaymentLoading] = useState(false);
-  const [checkingPayment, setCheckingPayment] = useState(false);
-
-  // PayOS Checkout Modal State
-  const [checkoutModal, setCheckoutModal] = useState(null);
+  const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [notification, setNotification] = useState(null);
 
   const showToast = (message, type = 'success') => {
@@ -75,6 +68,40 @@ export default function ProfilePage() {
     loadProfile();
   }, []);
 
+  // Xử lý khi PayOS chuyển hướng trở lại (sau khi thanh toán xong hoặc hủy)
+  useEffect(() => {
+    const payment = searchParams.get('payment');
+    const status = searchParams.get('status');
+    const orderCode = searchParams.get('orderCode');
+
+    if (payment === 'success' || status === 'PAID') {
+      if (orderCode) {
+        // Đồng bộ và kiểm tra trạng thái ngay lập tức
+        checkPaymentStatus(orderCode)
+          .then((res) => {
+            if (res.status === 'SUCCESS' || res.status === 'PAID') {
+              showToast('Thanh toán thành công! Gói VIP đã được kích hoạt.');
+            } else {
+              showToast('Giao dịch đã được ghi nhận, đang chờ xác nhận.', 'info');
+            }
+            loadProfile();
+          })
+          .catch(() => {
+            showToast('Thanh toán thành công! Đang tải lại dữ liệu gói VIP.');
+            loadProfile();
+          });
+      } else {
+        showToast('Thanh toán thành công! Gói VIP đã được kích hoạt.');
+        loadProfile();
+      }
+      setSearchParams({}, { replace: true });
+    } else if (payment === 'cancel' || status === 'CANCELLED') {
+      showToast('Giao dịch thanh toán đã bị hủy hoặc chưa hoàn tất.', 'info');
+      setSearchParams({}, { replace: true });
+      loadProfile();
+    }
+  }, [searchParams]);
+
   const formatVND = (amount) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
   };
@@ -93,73 +120,39 @@ export default function ProfilePage() {
     }
   };
 
-  // Handle Select Plan to Purchase
+  // Handle Select Plan to Purchase - Chuyển thẳng đến trang thanh toán của PayOS
   const handleSelectPlan = async (plan) => {
+    if (isVip) {
+      showToast('Bạn hiện đang có gói VIP còn hiệu lực, không thể đăng ký thêm gói mới.', 'info');
+      return;
+    }
+
     try {
       setPaymentLoading(true);
-      const currentUrl = window.location.href.split('?')[0];
+      setSelectedPlanId(plan.id);
+
+      // Tạo returnUrl và cancelUrl dẫn về trang Profile kèm tham số
+      const origin = window.location.origin;
+      const pathname = window.location.pathname;
+      const baseHashUrl = `${origin}${pathname}#/profile`;
+
       const res = await createPayOSPayment({
         vipPlanId: plan.id,
-        returnUrl: `${currentUrl}?payment=success`,
-        cancelUrl: `${currentUrl}?payment=cancel`
+        returnUrl: `${baseHashUrl}?payment=success`,
+        cancelUrl: `${baseHashUrl}?payment=cancel`
       });
 
-      // Show PayOS Modal
-      setCheckoutModal({
-        plan,
-        orderCode: res.orderCode,
-        amount: res.amount || plan.price,
-        description: res.description,
-        checkoutUrl: res.checkoutUrl,
-        qrCode: res.qrCode,
-        accountNumber: res.accountNumber || '6910889701',
-        accountName: res.accountName || 'NGUYEN MINH VUONG',
-        bin: res.bin || '970415'
-      });
-
-      showToast(`Đã tạo liên kết thanh toán cho ${plan.planName}`);
-    } catch (err) {
-      showToast(err.message || 'Lỗi khi khởi tạo thanh toán', 'error');
-    } finally {
-      setPaymentLoading(false);
-    }
-  };
-
-  // Check payment status manually
-  const handleCheckPayment = async () => {
-    if (!checkoutModal?.orderCode) return;
-    try {
-      setCheckingPayment(true);
-      const res = await checkPaymentStatus(checkoutModal.orderCode);
-      if (res.status === 'SUCCESS' || res.status === 'PAID') {
-        showToast('Thanh toán thành công! Gói VIP đã được kích hoạt.');
-        setCheckoutModal(null);
-        loadProfile();
-      } else if (res.status === 'CANCELLED') {
-        showToast('Giao dịch này đã bị hủy.', 'error');
-        setCheckoutModal(null);
-        loadProfile();
+      if (res && res.checkoutUrl) {
+        showToast(`Đang chuyển đến cổng thanh toán PayOS...`);
+        // Chuyển thẳng đến trang web thanh toán của PayOS
+        window.location.href = res.checkoutUrl;
       } else {
-        showToast('Đang chờ giao dịch hoàn tất từ ngân hàng...', 'info');
+        throw new Error('Không nhận được liên kết thanh toán từ cổng PayOS.');
       }
     } catch (err) {
-      showToast(err.message || 'Chưa nhận được giao dịch', 'error');
-    } finally {
-      setCheckingPayment(false);
-    }
-  };
-
-  // Cancel payment
-  const handleCancelPayment = async () => {
-    if (!checkoutModal?.orderCode) return;
-    if (!window.confirm('Bạn có chắc chắn muốn hủy giao dịch này không?')) return;
-    try {
-      await cancelPayOSPayment(checkoutModal.orderCode, 'Người dùng hủy thanh toán');
-      showToast('Đã hủy giao dịch thanh toán.');
-      setCheckoutModal(null);
-      loadProfile();
-    } catch (err) {
-      showToast(err.message || 'Không thể hủy giao dịch', 'error');
+      showToast(err.message || 'Lỗi khi khởi tạo thanh toán', 'error');
+      setPaymentLoading(false);
+      setSelectedPlanId(null);
     }
   };
 
@@ -305,37 +298,28 @@ export default function ProfilePage() {
             <div>
               <h3 className="font-bold text-white text-[13px] flex items-center space-x-1.5">
                 <Sparkles size={14} className="text-[#ffd700]" />
-                <span>Nâng cấp Gói VIP (PayOS VietQR)</span>
+                <span>Nâng cấp Gói VIP</span>
               </h3>
-              <p className="text-[10px] text-[#94a3b8]">
-                Mở khóa phân tích sâu, quét không giới hạn bình luận Threads
-              </p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-            {profileData?.availablePlans?.map((plan, idx) => {
+            {profileData?.availablePlans?.map((plan) => {
               const isBest = plan.planCode === 'VIP_90_DAYS';
               const isPro = plan.planCode === 'VIP_365_DAYS';
+              const isCurrentProcessing = paymentLoading && selectedPlanId === plan.id;
 
               return (
                 <div 
                   key={plan.id}
-                  className={`bg-[#1a1a2e] border rounded-xl p-3 flex flex-col justify-between space-y-3 relative transition-all hover:border-[#c0c1ff]/50 hover:shadow-xl ${
-                    isBest ? 'border-[#c0c1ff]/40 bg-[#1b1c33]' : 'border-white/10'
+                  className={`bg-[#1a1a2e] border rounded-xl p-3 flex flex-col justify-between space-y-3 relative transition-all ${
+                    isVip 
+                      ? 'opacity-80 border-white/5' 
+                      : isBest 
+                      ? 'border-[#c0c1ff]/40 bg-[#1b1c33] hover:border-[#c0c1ff]/50 hover:shadow-xl' 
+                      : 'border-white/10 hover:border-[#c0c1ff]/50 hover:shadow-xl'
                   }`}
                 >
-                  {isBest && (
-                    <div className="absolute -top-2.5 right-3 bg-[#c0c1ff] text-[#1000a9] text-[8px] font-bold font-['JetBrains_Mono'] px-2 py-0.5 rounded-full shadow">
-                      PHỔ BIẾN NHẤT
-                    </div>
-                  )}
-
-                  {isPro && (
-                    <div className="absolute -top-2.5 right-3 bg-[#ffd700] text-[#0d0d14] text-[8px] font-bold font-['JetBrains_Mono'] px-2 py-0.5 rounded-full shadow">
-                      TIẾT KIỆM 35%
-                    </div>
-                  )}
 
                   <div className="space-y-2">
                     <div>
@@ -360,10 +344,6 @@ export default function ProfilePage() {
                       </div>
                       <div className="flex items-center space-x-1.5">
                         <Check size={12} className="text-[#10b981] shrink-0" />
-                        <span>AI PhoBERT nhận diện tiếng lóng, mỉa mai</span>
-                      </div>
-                      <div className="flex items-center space-x-1.5">
-                        <Check size={12} className="text-[#10b981] shrink-0" />
                         <span>Phát hiện toxic, hateful comment tự động</span>
                       </div>
                       <div className="flex items-center space-x-1.5">
@@ -375,17 +355,33 @@ export default function ProfilePage() {
 
                   <button
                     onClick={() => handleSelectPlan(plan)}
-                    disabled={paymentLoading}
+                    disabled={paymentLoading || isVip}
                     className={`w-full py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow ${
-                      isBest 
+                      isVip
+                        ? 'bg-[#1e1e30] text-[#64748b] cursor-not-allowed border border-white/5'
+                        : isBest 
                         ? 'bg-[#c0c1ff] hover:bg-[#a9abff] text-[#1000a9]'
                         : isPro
                         ? 'bg-gradient-to-r from-[#ffd700] to-[#f59e0b] hover:opacity-90 text-[#0d0d14]'
                         : 'bg-[#282a30] hover:bg-[#33343b] text-white'
-                    }`}
+                    } ${isCurrentProcessing ? 'opacity-70 cursor-wait' : ''}`}
                   >
-                    <CreditCard size={13} />
-                    <span>Mua gói này</span>
+                    {isVip ? (
+                      <>
+                        <Check size={13} className="text-[#10b981]" />
+                        <span>Đang có gói VIP</span>
+                      </>
+                    ) : isCurrentProcessing ? (
+                      <>
+                        <RefreshCw size={13} className="animate-spin" />
+                        <span>Đang chuyển đến PayOS...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard size={13} />
+                        <span>Mua gói này</span>
+                      </>
+                    )}
                   </button>
                 </div>
               );
@@ -440,105 +436,6 @@ export default function ProfilePage() {
         )}
 
       </div>
-
-      {/* ========================================================= */}
-      {/* 4. PAYOS VIETQR CHECKOUT MODAL */}
-      {/* ========================================================= */}
-      {checkoutModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3">
-          <div className="bg-[#1a1a2e] border border-[#c0c1ff]/30 rounded-2xl w-full max-w-sm p-4 space-y-3.5 shadow-2xl relative">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
-              <div className="flex items-center space-x-1.5">
-                <span className="text-base">💳</span>
-                <div>
-                  <h3 className="font-bold text-white text-sm">Thanh toán PayOS VietQR</h3>
-                  <p className="text-[10px] text-[#94a3b8]">Đơn hàng #{checkoutModal.orderCode}</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setCheckoutModal(null)}
-                className="p-1 text-[#94a3b8] hover:text-white rounded"
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            {/* VietQR Code Display */}
-            <div className="bg-white p-3 rounded-xl flex flex-col items-center justify-center shadow-inner">
-              <img 
-                src={`https://img.vietqr.io/image/BIDV-${checkoutModal.accountNumber}-compact2.png?amount=${checkoutModal.amount}&addInfo=${encodeURIComponent(checkoutModal.description)}&accountName=${encodeURIComponent(checkoutModal.accountName)}`}
-                alt="VietQR PayOS" 
-                className="w-48 h-48 object-contain"
-              />
-              <span className="text-[10px] text-[#13131f] font-semibold font-['JetBrains_Mono'] mt-1">
-                Quét mã bằng App Ngân hàng bất kỳ
-              </span>
-            </div>
-
-            {/* Payment Details */}
-            <div className="bg-[#13131f] p-2.5 rounded-lg border border-white/5 space-y-1.5 text-[11px]">
-              <div className="flex justify-between">
-                <span className="text-[#94a3b8]">Gói đăng ký:</span>
-                <span className="font-bold text-white">{checkoutModal.plan?.planName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#94a3b8]">Số tiền cần thanh toán:</span>
-                <span className="font-['JetBrains_Mono'] font-bold text-[#10b981] text-[13px]">
-                  {formatVND(checkoutModal.amount)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#94a3b8]">Ngân hàng nhận:</span>
-                <span className="font-semibold text-white">BIDV ({checkoutModal.accountNumber})</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#94a3b8]">Chủ tài khoản:</span>
-                <span className="font-semibold text-white uppercase">{checkoutModal.accountName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#94a3b8]">Nội dung chuyển khoản:</span>
-                <span className="font-['JetBrains_Mono'] font-bold text-[#c0c1ff]">
-                  {checkoutModal.description}
-                </span>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="space-y-2 pt-1">
-              {checkoutModal.checkoutUrl && (
-                <a 
-                  href={checkoutModal.checkoutUrl}
-                  target="_blank" 
-                  rel="noreferrer"
-                  className="w-full py-2 bg-[#22c55e] hover:bg-[#16a34a] text-white font-bold rounded-lg transition flex items-center justify-center space-x-1.5 shadow"
-                >
-                  <ExternalLink size={14} />
-                  <span>Mở trang thanh toán PayOS</span>
-                </a>
-              )}
-
-              <div className="flex space-x-2">
-                <button 
-                  onClick={handleCheckPayment}
-                  disabled={checkingPayment}
-                  className="flex-1 py-1.5 bg-[#c0c1ff] hover:bg-[#a9abff] text-[#1000a9] font-bold rounded-lg transition flex items-center justify-center space-x-1"
-                >
-                  <RefreshCw size={12} className={checkingPayment ? 'animate-spin' : ''} />
-                  <span>{checkingPayment ? 'Đang kiểm tra...' : 'Kiểm tra kết quả'}</span>
-                </button>
-
-                <button 
-                  onClick={handleCancelPayment}
-                  className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 font-semibold rounded-lg transition"
-                >
-                  Hủy đơn
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,19 +1,22 @@
 import { useState } from 'react';
-import CommentDetail from './CommentDetail';
+import { useAuth } from '../../context/AuthContext';
 
 const SENTIMENT_META = {
   positive:    { label: 'Tích cực',       color: '#10b981', className: 'pos' },
-  neutral:     { label: 'Trung tính',      color: '#6b7280', className: 'neu' },
+  neutral:     { label: 'Trung tính',      color: '#94a3b8', className: 'neu' },
   negative:    { label: 'Tiêu cực',       color: '#f87171', className: 'neg' },
   unprocessed: { label: 'Chưa phân tích', color: '#eab308', className: 'unprocessed' },
 };
 
-function ToxBar({ value, color }) {
-  return (
-    <div className="rc-bar-track">
-      <div className="rc-bar-fill" style={{ width: `${Math.min(value || 0, 100)}%`, background: color }} />
-    </div>
-  );
+function getAvatarUrl(username, user, customAvatar) {
+  if (customAvatar) return customAvatar;
+  const clean = (username || 'user').replace('@', '').trim();
+  if (user && (user.username === clean || `@${user.username}` === username)) {
+    if (user.profilePicture || user.avatar || user.profile_picture_url) {
+      return user.profilePicture || user.avatar || user.profile_picture_url;
+    }
+  }
+  return `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(clean)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
 }
 
 export default function ReplyCard({
@@ -24,25 +27,22 @@ export default function ReplyCard({
   isAnalyzing,
   analyzingId,
 }) {
+  const { user } = useAuth() || {};
   const [collapsed,   setCollapsed]   = useState(reply.hidden);
-  const [showDetail,  setShowDetail]  = useState(false);
   const [showReplies, setShowReplies] = useState(true);
+  const [imgError,    setImgError]    = useState(false);
 
   const sm          = SENTIMENT_META[reply.sentiment] ?? SENTIMENT_META.unprocessed;
   const isHigh      = reply.analyzed && (reply.toxicityLevel === 'High' || (reply.toxicity || 0) >= 60);
   const isViolating = reply.analyzed && reply.violating;
   const borderColor = isViolating ? '#ef4444' : isHigh ? '#f97316' : 'transparent';
 
-  if (showDetail) {
-    return (
-      <CommentDetail
-        reply={reply}
-        onBack={() => setShowDetail(false)}
-        onReanalyze={onAnalyzeSingle}
-        isAnalyzing={isAnalyzing}
-      />
-    );
-  }
+  const cleanUser = (reply.username || 'user').replace('@', '').trim();
+  const avatarUrl = getAvatarUrl(
+    reply.username,
+    user,
+    reply.avatar || reply.profilePicture || reply.profile_picture_url
+  );
 
   return (
     <div className="rc-thread-group">
@@ -53,19 +53,34 @@ export default function ReplyCard({
         {/* ── header ── */}
         <div className="rc-header">
           <div className="rc-user-row">
-            <div className="rc-avatar" style={{
-              background: isViolating ? 'linear-gradient(135deg,#7f1d1d,#ef4444)' :
-                          isHigh      ? 'linear-gradient(135deg,#78350f,#f97316)' :
-                                        'linear-gradient(135deg,#312e81,#6d28d9)',
-            }}>
-              {reply.username?.charAt(1)?.toUpperCase() || 'U'}
+            <div className="rc-avatar-container">
+              {!imgError ? (
+                <img
+                  src={avatarUrl}
+                  alt={reply.username || 'avatar'}
+                  className="rc-avatar-img"
+                  onError={() => setImgError(true)}
+                  loading="lazy"
+                />
+              ) : (
+                <div
+                  className="rc-avatar"
+                  style={{
+                    background: isViolating ? 'linear-gradient(135deg,#7f1d1d,#ef4444)' :
+                                isHigh      ? 'linear-gradient(135deg,#78350f,#f97316)' :
+                                              'linear-gradient(135deg,#312e81,#6d28d9)',
+                  }}
+                >
+                  {cleanUser.charAt(0).toUpperCase() || 'U'}
+                </div>
+              )}
             </div>
             <div className="rc-user-info">
               <div className="rc-username-row">
                 <span className="rc-username">{reply.username}</span>
                 {isChild && (
                   <span className="rc-reply-to-badge">
-                    ↪ Phản hồi {reply.replyToUser || 'bình luận'}
+                    Phản hồi {reply.replyToUser || 'bình luận'}
                   </span>
                 )}
                 {isViolating && <span className="rc-violation-badge">VI PHẠM</span>}
@@ -83,15 +98,15 @@ export default function ReplyCard({
               </span>
             ) : !reply.analyzed ? (
               <span className="rc-badge" style={{ color: '#facc15', background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.3)' }}>
-                ⏳ Chưa phân tích
+                Chưa phân tích
               </span>
             ) : isViolating ? (
-              <span className="rc-badge rc-badge--vio">🔴 Hate {reply.hate}%</span>
+              <span className="rc-badge rc-badge--vio">Thù ghét {reply.hate}%</span>
             ) : isHigh ? (
-              <span className="rc-badge rc-badge--high">⚠ Toxicity {reply.toxicity}% • High</span>
+              <span className="rc-badge rc-badge--high">Độc hại cao {reply.toxicity}%</span>
             ) : (
-              <span className="rc-badge rc-badge--sm" style={{ color: sm.color }}>
-                ● {sm.label} • {reply.sentimentScore}%
+              <span className="rc-badge rc-badge--sm" style={{ color: sm.color, borderColor: sm.color }}>
+                {sm.label} • {reply.sentimentScore}%
               </span>
             )}
             <button className="rc-more">⋮</button>
@@ -104,46 +119,105 @@ export default function ReplyCard({
         ) : (
           <div className="rc-hidden-row">
             <button className="rc-show-btn" onClick={() => setCollapsed(false)}>
-              👁 Đã giới hạn hiển thị
+              Nội dung đã bị ẩn
             </button>
-            <button className="rc-reply-btn">Ẩn reply</button>
+            <button className="rc-reply-btn" onClick={() => setCollapsed(false)}>Hiện lại</button>
           </div>
         )}
 
-        {/* ── metrics ── */}
+        {/* ── metrics hiển thị trực tiếp tất cả thông số gọn gàng ── */}
         {reply.analyzed ? (
-          <div className="rc-metrics">
-            <div className="rc-metric">
-              <span className="rc-metric-label">Toxicity</span>
-              <span className="rc-metric-val" style={{ color: reply.toxicity > 60 ? '#ef4444' : '#6b7280' }}>
-                {reply.toxicity}%
-              </span>
-              <ToxBar value={reply.toxicity}
-                color={reply.toxicity > 60 ? '#ef4444' : reply.toxicity > 20 ? '#f97316' : '#6b7280'} />
+          <div className="rc-metrics-grid">
+            {/* 1. Độ độc hại */}
+            <div className={`rc-metric-item ${reply.toxicity > 60 ? 'm-danger' : reply.toxicity > 30 ? 'm-warning' : 'm-safe'}`}>
+              <div className="rc-metric-top">
+                <span className="rc-metric-title">Độc hại (Toxicity)</span>
+                <span className="rc-metric-pct">{reply.toxicity ?? 0}%</span>
+              </div>
+              <div className="rc-metric-desc">
+                {reply.toxicity > 60 ? 'Độc hại cao' : reply.toxicity > 30 ? 'Cảnh báo' : 'An toàn'}
+              </div>
+              <div className="rc-bar-track">
+                <div
+                  className="rc-bar-fill"
+                  style={{
+                    width: `${Math.min(reply.toxicity || 0, 100)}%`,
+                    background: reply.toxicity > 60 ? '#ef4444' : reply.toxicity > 30 ? '#f97316' : '#10b981'
+                  }}
+                />
+              </div>
             </div>
-            <div className="rc-metric">
-              <span className="rc-metric-label">Hate</span>
-              <span className="rc-metric-val" style={{ color: reply.hate > 30 ? '#f87171' : '#6b7280' }}>
-                {reply.hate}%
-              </span>
-              <ToxBar value={reply.hate}
-                color={reply.hate > 30 ? '#f87171' : '#6b7280'} />
+
+            {/* 2. Thù ghét */}
+            <div className={`rc-metric-item ${reply.hate > 30 || isViolating ? 'm-danger' : 'm-safe'}`}>
+              <div className="rc-metric-top">
+                <span className="rc-metric-title">Thù ghét (Hate)</span>
+                <span className="rc-metric-pct">{reply.hate ?? 0}%</span>
+              </div>
+              <div className="rc-metric-desc">
+                {reply.hate > 30 || isViolating ? 'Vi phạm chuẩn mực' : 'Không vi phạm'}
+              </div>
+              <div className="rc-bar-track">
+                <div
+                  className="rc-bar-fill"
+                  style={{
+                    width: `${Math.min(reply.hate || 0, 100)}%`,
+                    background: reply.hate > 30 || isViolating ? '#ef4444' : '#10b981'
+                  }}
+                />
+              </div>
             </div>
-            <div className="rc-metric rc-metric--conf">
-              <span className="rc-metric-label">Confidence</span>
-              <span className="rc-metric-val rc-metric-val--cyan">{reply.confidence}%</span>
+
+            {/* 3. Sắc thái */}
+            <div className="rc-metric-item m-sentiment">
+              <div className="rc-metric-top">
+                <span className="rc-metric-title">Sắc thái</span>
+                <span className="rc-metric-pct" style={{ color: sm.color }}>{reply.sentimentScore ?? 0}%</span>
+              </div>
+              <div className="rc-metric-desc" style={{ color: sm.color }}>
+                {sm.label}
+              </div>
+              <div className="rc-bar-track">
+                <div
+                  className="rc-bar-fill"
+                  style={{
+                    width: `${Math.min(reply.sentimentScore || 0, 100)}%`,
+                    background: sm.color
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* 4. Độ tin cậy */}
+            <div className="rc-metric-item m-conf">
+              <div className="rc-metric-top">
+                <span className="rc-metric-title">Độ tin cậy AI</span>
+                <span className="rc-metric-pct" style={{ color: '#38bdf8' }}>{reply.confidence ?? 0}%</span>
+              </div>
+              <div className="rc-metric-desc" style={{ color: '#38bdf8' }}>
+                PhoBERT v2.1
+              </div>
+              <div className="rc-bar-track">
+                <div
+                  className="rc-bar-fill"
+                  style={{
+                    width: `${Math.min(reply.confidence || 0, 100)}%`,
+                    background: '#0284c7'
+                  }}
+                />
+              </div>
             </div>
           </div>
         ) : (
-          <div className="rc-metrics" style={{ color: '#94a3b8', fontSize: '12px', fontStyle: 'italic', padding: '6px 0', borderTop: '1px dashed rgba(255,255,255,0.08)' }}>
-            ℹ Chưa chạy qua PhoBERT — Bấm &quot;Phân tích&quot; để quét Toxicity &amp; Sắc thái
+          <div className="rc-unprocessed-note">
+            <span>Chưa phân tích PhoBERT — Bấm &quot;Phân tích&quot; để quét Toxicity &amp; Sắc thái</span>
           </div>
         )}
 
         {/* ── footer ── */}
         <div className="rc-footer">
           <span className="rc-foot-stats">
-            {reply.likes > 0 && <span>♥{reply.likes}</span>}
+            {reply.likes > 0 && <span className="rc-likes-count">{reply.likes} thích</span>}
             {childReplies.length > 0 && (
               <button
                 type="button"
@@ -151,14 +225,14 @@ export default function ReplyCard({
                 onClick={() => setShowReplies(s => !s)}
                 title="Bấm để xem các câu trả lời cho bình luận này"
               >
-                <span>💬</span>
-                <span>{showReplies ? 'Ẩn' : 'Xem'} {childReplies.length} câu trả lời</span>
-                <span style={{ fontSize: '9px' }}>{showReplies ? '▲' : '▼'}</span>
+                <span>{showReplies ? 'Ẩn' : 'Xem'} {childReplies.length} phản hồi</span>
               </button>
             )}
-            {childReplies.length === 0 && reply.replies > 0 && <span>↩{reply.replies}</span>}
+            {childReplies.length === 0 && reply.replies > 0 && (
+              <span className="rc-replies-count">{reply.replies} phản hồi</span>
+            )}
             {(reply.likes === 0 && childReplies.length === 0 && (!reply.replies || reply.replies === 0)) && !isViolating && (
-              <span className="rc-foot-near">↩Gần đây</span>
+              <span className="rc-foot-near">Gần đây</span>
             )}
           </span>
 
@@ -167,8 +241,9 @@ export default function ReplyCard({
               <button
                 className="cd-btn-reanalyze"
                 style={{
-                  padding: '4px 10px',
-                  fontSize: '11px',
+                  padding: '5px 12px',
+                  fontSize: '11.5px',
+                  fontWeight: 600,
                   margin: 0,
                   background: 'linear-gradient(135deg, #0284c7, #2563eb)',
                   color: '#fff',
@@ -182,19 +257,15 @@ export default function ReplyCard({
                 }}
                 disabled={isAnalyzing}
               >
-                ⚡ Phân tích
+                Phân tích
               </button>
             )}
 
             {isViolating && (
               <button className="rc-show-btn" onClick={() => setCollapsed(c => !c)}>
-                👁 {collapsed ? 'Hiện' : 'Ẩn'} reply
+                {collapsed ? 'Hiện nội dung' : 'Ẩn nội dung'}
               </button>
             )}
-
-            <button className="rc-detail-btn" onClick={() => setShowDetail(true)}>
-              Chi tiết ›
-            </button>
           </div>
         </div>
       </div>

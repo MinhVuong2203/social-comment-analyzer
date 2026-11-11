@@ -24,11 +24,21 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
+        // Cho phép PayOS (server bên ngoài) gọi webhook mà không bị chặn CORS.
+        // Webhook là server-to-server call nên cần allowedOrigins("*").
+        registry
+                .addMapping("/api/payments/payos/webhook")
+                .allowedOrigins("*")
+                .allowedMethods("GET", "POST", "OPTIONS")
+                .allowedHeaders("*");
+
+        // Các endpoint còn lại chỉ cho phép frontend đã biết
         registry
                 .addMapping("/**")
                 .allowedOrigins(
                         "http://localhost:5173",
-                        "http://127.0.0.1:5173"
+                        "http://127.0.0.1:5173",
+                        "https://extension-threads-analyze-production.up.railway.app"
                 )
                 .allowedMethods(
                         "GET",

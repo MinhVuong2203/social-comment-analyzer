@@ -3,7 +3,18 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 MODEL_DIR = BASE_DIR / "models"
+DATA_DIR = BASE_DIR / "app" / "data"
+
+# Đường dẫn từ điển teencode
+TEENCODE_JSON_PATH = Path(os.getenv("TEENCODE_JSON_PATH", str(DATA_DIR / "teencode.json")))
+TEENCODE_EXCEL_PATH = Path(os.getenv("TEENCODE_EXCEL_PATH", str(DATA_DIR / "teencode.xlsx")))
+COLAB_EXCEL_PATH = BASE_DIR / "colab" / "teencode.xlsx"
+
 MAX_LENGTH = 256
+# Số bình luận đưa vào model mỗi lần: càng lớn càng tốn RAM.
+BATCH_SIZE = int(os.getenv("AI_BATCH_SIZE", "8"))
+# Không đặt thì các API dự đoán không yêu cầu key (dùng khi chạy local).
+API_KEY = os.getenv("AI_SERVICE_API_KEY")
 
 MODEL_PATHS = {
     "toxicity": MODEL_DIR / "toxicity",
