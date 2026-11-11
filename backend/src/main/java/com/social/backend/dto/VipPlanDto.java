@@ -82,7 +82,9 @@ public class VipPlanDto {
             long activeSubscriptions,
             long pendingSubscriptions,
             BigDecimal totalRevenue,
-            long totalTransactions
+            long totalTransactions,
+            Double revenueGrowthRate,
+            Double subscriptionsGrowthRate
     ) {}
 }
 
