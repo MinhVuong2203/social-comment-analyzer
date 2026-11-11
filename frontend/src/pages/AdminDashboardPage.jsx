@@ -18,13 +18,18 @@ import {
   UserX,
   UserCheck,
   Shield,
-  X
+  X,
+  Activity,
+  Cpu,
+  Zap,
+  CheckCircle2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { 
   getAdminDashboardData, 
   getChartAnalysisStats,
   getAdminAuditLogs,
+  getAiHealthStatus,
   formatCompactNumber, 
   formatCurrency,
   formatRelativeTime,
@@ -124,8 +129,29 @@ export default function AdminDashboardPage() {
     sentimentStats: null,
     toxicPosts: [],
     auditLogs: [],
+    aiHealth: null,
     isBackendConnected: false
   });
+
+  // State Giám sát hiệu năng AI (AI Latency & Health)
+  const [liveAiHealth, setLiveAiHealth] = useState(null);
+  const [isPingingAi, setIsPingingAi] = useState(false);
+
+  const activeAiHealth = liveAiHealth || dashboardData.aiHealth;
+
+  const handlePingAi = async () => {
+    setIsPingingAi(true);
+    try {
+      const res = await getAiHealthStatus();
+      if (res) {
+        setLiveAiHealth(res);
+      }
+    } catch (e) {
+      console.warn("Lỗi ping kiểm tra AI Service:", e);
+    } finally {
+      setIsPingingAi(false);
+    }
+  };
 
   // State Modal xem toàn bộ 50 nhật ký hoạt động
   const [showAuditModal, setShowAuditModal] = useState(false);
@@ -851,6 +877,148 @@ export default function AdminDashboardPage() {
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* Khối Giám sát hiệu năng AI (AI Latency & Health) */}
+        <div className="bg-[#1a1a2e] border border-white/10 rounded-lg p-2.5 space-y-2.5">
+          <div className="flex items-center justify-between border-b border-white/10 pb-1.5 flex-wrap gap-1.5">
+            <div className="flex items-center space-x-1.5">
+              <Activity size={13} className="text-[#4cd7f6]" />
+              <span className="font-semibold text-[11px] text-[#f1f5f9]">
+                Hiệu năng & Sức khỏe AI
+              </span>
+              <span className="text-[9px] px-1.5 py-0.2 rounded font-['JetBrains_Mono'] bg-[#4cd7f6]/15 text-[#4cd7f6] border border-[#4cd7f6]/30">
+                PhoBERT v2
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              {/* Badge trạng thái */}
+              {activeAiHealth?.status === 'ONLINE' ? (
+                <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-['JetBrains_Mono'] font-medium bg-[#4edea3]/15 text-[#4edea3] border border-[#4edea3]/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse shrink-0" />
+                  <span>Online</span>
+                </span>
+              ) : activeAiHealth?.status === 'DEGRADED' ? (
+                <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-['JetBrains_Mono'] font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                  <span>Độ trễ cao</span>
+                </span>
+              ) : (
+                <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-['JetBrains_Mono'] font-medium bg-[#93000a]/20 text-[#ffb4ab] border border-[#ffb4ab]/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#ff5449] shrink-0" />
+                  <span>Offline</span>
+                </span>
+              )}
+
+              {/* Nút Ping kiểm tra tức thời */}
+              <button
+                onClick={handlePingAi}
+                disabled={isPingingAi}
+                className="text-[10px] text-[#4cd7f6] hover:text-[#7ce5f8] hover:underline flex items-center space-x-1 cursor-pointer font-['JetBrains_Mono'] transition-colors disabled:opacity-50"
+                title="Gửi ping kiểm tra độ trễ AI Service theo thời gian thực"
+              >
+                <RefreshCw size={10} className={isPingingAi ? "animate-spin" : ""} />
+                <span>{isPingingAi ? "Đang ping..." : "Kiểm tra"}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Grid 4 ô chỉ số hiệu năng */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+            <div className="bg-[#121221] p-2 rounded-lg border border-white/5 space-y-0.5">
+              <div className="text-[9px] text-[#94a3b8] flex items-center space-x-1 font-['JetBrains_Mono']">
+                <Zap size={10} className="text-[#4cd7f6]" />
+                <span>Độ trễ Ping</span>
+              </div>
+              <div className="text-[13px] font-bold font-['JetBrains_Mono'] text-[#4cd7f6]">
+                {activeAiHealth?.latencyMs != null ? `${activeAiHealth.latencyMs} ms` : '--'}
+              </div>
+              <div className="text-[8px] text-[#64748b] font-['JetBrains_Mono']">
+                {activeAiHealth?.latencyMs != null && activeAiHealth.latencyMs < 50
+                  ? '⚡ Rất nhanh'
+                  : activeAiHealth?.latencyMs != null && activeAiHealth.latencyMs < 200
+                  ? '✓ Ổn định'
+                  : activeAiHealth?.latencyMs != null
+                  ? '⚠ Chậm'
+                  : 'Chưa đo'}
+              </div>
+            </div>
+
+            <div className="bg-[#121221] p-2 rounded-lg border border-white/5 space-y-0.5">
+              <div className="text-[9px] text-[#94a3b8] flex items-center space-x-1 font-['JetBrains_Mono']">
+                <Activity size={10} className="text-[#c0c1ff]" />
+                <span>Suy luận PhoBERT</span>
+              </div>
+              <div className="text-[13px] font-bold font-['JetBrains_Mono'] text-[#c0c1ff]">
+                {activeAiHealth?.inferenceLatencyMs != null ? `${activeAiHealth.inferenceLatencyMs} ms` : '--'}
+              </div>
+              <div className="text-[8px] text-[#64748b] font-['JetBrains_Mono']">
+                Single Inference
+              </div>
+            </div>
+
+            <div className="bg-[#121221] p-2 rounded-lg border border-white/5 space-y-0.5">
+              <div className="text-[9px] text-[#94a3b8] flex items-center space-x-1 font-['JetBrains_Mono']">
+                <Cpu size={10} className="text-[#4edea3]" />
+                <span>Thiết bị chạy</span>
+              </div>
+              <div className="text-[13px] font-bold font-['JetBrains_Mono'] text-[#4edea3] truncate">
+                {activeAiHealth?.device ? activeAiHealth.device.toUpperCase() : 'CPU'}
+              </div>
+              <div className="text-[8px] text-[#64748b] font-['JetBrains_Mono']">
+                PyTorch Device
+              </div>
+            </div>
+
+            <div className="bg-[#121221] p-2 rounded-lg border border-white/5 space-y-0.5">
+              <div className="text-[9px] text-[#94a3b8] flex items-center space-x-1 font-['JetBrains_Mono']">
+                <ShieldCheck size={10} className="text-[#f59e0b]" />
+                <span>Tổng suy luận</span>
+              </div>
+              <div className="text-[13px] font-bold font-['JetBrains_Mono'] text-white">
+                {formatCompactNumber(activeAiHealth?.totalPredictions || 0)}
+              </div>
+              <div className="text-[8px] text-[#64748b] font-['JetBrains_Mono']">
+                Bình luận đã lưu
+              </div>
+            </div>
+          </div>
+
+          {/* Trạng thái 3 Model PhoBERT & Teencode */}
+          <div className="bg-[#121221] p-2 rounded-lg border border-white/5 space-y-1.5 text-[10px]">
+            <div className="text-[9px] text-[#94a3b8] font-['JetBrains_Mono'] uppercase tracking-wider">
+              Trạng thái 3 Mô hình phân loại
+            </div>
+            <div className="grid grid-cols-3 gap-1.5 text-[10px]">
+              <div className="flex items-center space-x-1.5 p-1 rounded bg-black/20 border border-white/5">
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${activeAiHealth?.models?.toxicity ? 'bg-[#4edea3]' : 'bg-[#ff5449]'}`} />
+                <span className="text-[#cbd5e1] truncate">Toxicity</span>
+              </div>
+              <div className="flex items-center space-x-1.5 p-1 rounded bg-black/20 border border-white/5">
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${activeAiHealth?.models?.hate_speech ? 'bg-[#4edea3]' : 'bg-[#ff5449]'}`} />
+                <span className="text-[#cbd5e1] truncate">Hate Speech</span>
+              </div>
+              <div className="flex items-center space-x-1.5 p-1 rounded bg-black/20 border border-white/5">
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${activeAiHealth?.models?.sentiment ? 'bg-[#4edea3]' : 'bg-[#ff5449]'}`} />
+                <span className="text-[#cbd5e1] truncate">Sentiment</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-1 border-t border-white/5 text-[9px] text-[#94a3b8] font-['JetBrains_Mono']">
+              <span>
+                Bộ tiền xử lý Teencode:{' '}
+                <strong className="text-white">
+                  {activeAiHealth?.teencode?.dictionary_size || activeAiHealth?.teencode?.dictionarySize || 135} quy tắc
+                </strong>
+              </span>
+              {activeAiHealth?.lastCheckedAt && (
+                <span className="text-[#64748b]">
+                  Lần kiểm tra: {formatExactDateTime(activeAiHealth.lastCheckedAt)}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 

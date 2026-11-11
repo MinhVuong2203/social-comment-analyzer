@@ -251,6 +251,19 @@ public class AdminController {
         return ResponseEntity.ok(auditLogService.getRecentLogs(limit));
     }
 
+    /**
+     * Giám sát hiệu năng và sức khỏe của PhoBERT AI Service (AI Latency & Health)
+     * GET /api/admin/ai-health
+     */
+    @GetMapping("/ai-health")
+    public ResponseEntity<AdminDto.AiHealthStatus> getAiHealth(
+            HttpServletRequest httpRequest,
+            HttpSession session
+    ) {
+        validateAdmin(httpRequest, session);
+        return ResponseEntity.ok(analysisService.getAiHealthStatus());
+    }
+
     private void validateAdmin(HttpServletRequest request, HttpSession session) {
         if (session != null) {
             boolean hasAdminSession = Boolean.TRUE.equals(session.getAttribute("admin_logged_in"))

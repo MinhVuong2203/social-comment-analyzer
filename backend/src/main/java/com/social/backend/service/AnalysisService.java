@@ -481,4 +481,66 @@ public class AnalysisService {
                 })
                 .toList();
     }
+
+    /**
+     * Giám sát hiệu năng và sức khỏe của PhoBERT AI Service
+     * Đo lường thời gian ping healthcheck và thời gian suy luận thực tế (Inference Latency)
+     */
+    public AdminDto.AiHealthStatus getAiHealthStatus() {
+        long totalPredictions = predictionRepository.count();
+        long pingStart = System.currentTimeMillis();
+
+        try {
+            // 1. Kiểm tra trạng thái và đo ping
+            Map<String, Object> aiHealth = aiServiceClient.health();
+            long latencyMs = System.currentTimeMillis() - pingStart;
+
+            // 2. Đo thời gian suy luận thực tế trên 1 câu mẫu
+            Long inferenceLatencyMs = null;
+            try {
+                long inferStart = System.currentTimeMillis();
+                aiServiceClient.predict("Bình luận kiểm tra hiệu năng hệ thống");
+                inferenceLatencyMs = System.currentTimeMillis() - inferStart;
+            } catch (Exception ex) {
+                // Nếu suy luận mẫu gặp lỗi nhẹ, vẫn giữ kết quả healthcheck
+            }
+
+            String status = latencyMs > 1000 ? "DEGRADED" : "ONLINE";
+            String device = aiHealth != null && aiHealth.get("device") != null
+                    ? String.valueOf(aiHealth.get("device")) : "CPU";
+
+            @SuppressWarnings("unchecked")
+            Map<String, Boolean> models = (aiHealth != null && aiHealth.get("models") instanceof Map)
+                    ? (Map<String, Boolean>) aiHealth.get("models") : Collections.emptyMap();
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> teencode = (aiHealth != null && aiHealth.get("teencode") instanceof Map)
+                    ? (Map<String, Object>) aiHealth.get("teencode") : Collections.emptyMap();
+
+            return new AdminDto.AiHealthStatus(
+                    status,
+                    latencyMs,
+                    inferenceLatencyMs,
+                    device,
+                    models,
+                    teencode,
+                    totalPredictions,
+                    LocalDateTime.now(),
+                    "PhoBERT AI Service đang hoạt động ổn định"
+            );
+        } catch (Exception e) {
+            long latencyMs = System.currentTimeMillis() - pingStart;
+            return new AdminDto.AiHealthStatus(
+                    "OFFLINE",
+                    latencyMs,
+                    null,
+                    "N/A",
+                    Collections.emptyMap(),
+                    Collections.emptyMap(),
+                    totalPredictions,
+                    LocalDateTime.now(),
+                    "Không thể kết nối đến AI Service: " + e.getMessage()
+            );
+        }
+    }
 }

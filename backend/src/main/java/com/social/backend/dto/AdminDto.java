@@ -1,6 +1,7 @@
 package com.social.backend.dto;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 public class AdminDto {
     public record LoginRequest(
@@ -67,5 +68,17 @@ public class AdminDto {
     public record UserLockRequest(
             String duration, // "1_DAY", "7_DAYS", "30_DAYS", "PERMANENT"
             String reason
+    ) {}
+
+    public record AiHealthStatus(
+            String status,                // "ONLINE", "DEGRADED", "OFFLINE"
+            Long latencyMs,               // Độ trễ ping healthcheck (ms)
+            Long inferenceLatencyMs,      // Độ trễ suy luận mô hình PhoBERT thực tế (ms)
+            String device,                // "cpu", "cuda:0", "N/A"
+            Map<String, Boolean> models,  // {"toxicity": true, "hate_speech": true, "sentiment": true}
+            Map<String, Object> teencode, // {"dictionary_size": 135, "status": "ready"}
+            long totalPredictions,        // Tổng số lượt bình luận đã phân tích trong DB
+            LocalDateTime lastCheckedAt,  // Thời điểm kiểm tra
+            String message                // Diễn giải trạng thái
     ) {}
 }

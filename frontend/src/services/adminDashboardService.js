@@ -150,6 +150,46 @@ export const getToxicPostsAlerts = async (limit = 3) => {
   }
 };
 
+// Lấy trạng thái giám sát hiệu năng AI (AI Latency & Health)
+export const getAiHealthStatus = async () => {
+  const headers = getAdminHeaders();
+  const fetchOptions = {
+    method: "GET",
+    credentials: "include",
+    headers,
+  };
+  try {
+    const res = await fetch(`${API_URL}/api/admin/ai-health`, fetchOptions);
+    if (res.ok) {
+      return await res.json();
+    }
+    return {
+      status: "OFFLINE",
+      latencyMs: null,
+      inferenceLatencyMs: null,
+      device: "N/A",
+      models: {},
+      teencode: {},
+      totalPredictions: 0,
+      lastCheckedAt: new Date().toISOString(),
+      message: `AI Service phản hồi lỗi (Mã ${res.status})`,
+    };
+  } catch (err) {
+    console.warn("Lỗi kiểm tra /api/admin/ai-health:", err.message);
+    return {
+      status: "OFFLINE",
+      latencyMs: null,
+      inferenceLatencyMs: null,
+      device: "N/A",
+      models: {},
+      teencode: {},
+      totalPredictions: 0,
+      lastCheckedAt: new Date().toISOString(),
+      message: `Không thể kết nối đến AI Service: ${err.message}`,
+    };
+  }
+};
+
 // Lấy danh sách nhật ký hoạt động quản trị gần nhất
 export const getAdminAuditLogs = async (limit = 5) => {
   const headers = getAdminHeaders();
@@ -235,7 +275,10 @@ export const getAdminDashboardData = async ({ days = null } = {}) => {
       return [];
     });
 
-  const [stats, subStats, vipPlans, users, subscriptions, toxicPosts, auditLogs] = await Promise.all([
+  // 8. Fetch trạng thái giám sát hiệu năng AI (AI Latency & Health)
+  const aiHealthPromise = getAiHealthStatus();
+
+  const [stats, subStats, vipPlans, users, subscriptions, toxicPosts, auditLogs, aiHealth] = await Promise.all([
     statsPromise,
     subStatsPromise,
     plansPromise,
@@ -243,6 +286,7 @@ export const getAdminDashboardData = async ({ days = null } = {}) => {
     subsPromise,
     toxicPostsPromise,
     auditLogsPromise,
+    aiHealthPromise,
   ]);
 
   // Nếu cả 2 API thống kê chính đều null -> có thể backend chưa bật hoặc mất kết nối
@@ -384,5 +428,6 @@ export const getAdminDashboardData = async ({ days = null } = {}) => {
     sentimentStats,
     toxicPosts: Array.isArray(toxicPosts) ? toxicPosts : [],
     auditLogs: Array.isArray(auditLogs) ? auditLogs : [],
+    aiHealth: aiHealth || null,
   };
 };
