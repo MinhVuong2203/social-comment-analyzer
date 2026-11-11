@@ -208,6 +208,181 @@ export const getAdminAuditLogs = async (limit = 5) => {
   }
 };
 
+// Xuất danh sách nhật ký hoạt động quản trị ra file CSV (chuẩn UTF-8 BOM hiển thị tiếng Việt trên Excel)
+export const exportAuditLogsToCSV = (logs = []) => {
+  if (!Array.isArray(logs) || logs.length === 0) {
+    alert("Không có dữ liệu nhật ký hoạt động để xuất.");
+    return false;
+  }
+
+  const headers = ["STT", "Thời gian", "Admin thực hiện", "Hành động", "Mô tả chi tiết", "Phân hệ", "Đối tượng tác động"];
+  
+  const rows = logs.map((log, index) => {
+    const isLock = log.action === 'LOCK_USER';
+    const isUnlock = log.action === 'UNLOCK_USER';
+    const isVip = log.action === 'GRANT_VIP';
+    const isPlan = log.action?.includes('PLAN');
+    const isLogin = log.action === 'ADMIN_LOGIN';
+
+    const actionLabel = isLock ? 'Khóa user' :
+      isUnlock ? 'Mở khóa user' :
+      isVip ? 'Cấp VIP' :
+      isPlan ? 'Gói VIP' :
+      isLogin ? 'Đăng nhập admin' :
+      (log.action || 'Hệ thống');
+
+    const cleanDesc = formatAuditDescription(log.description || '');
+    const cleanTime = formatExactDateTime(log.createdAt) || (log.createdAt || '');
+    const adminUser = log.adminUsername || 'admin';
+    const category = log.category || 'SYSTEM';
+    const target = log.target || '';
+
+    return [
+      index + 1,
+      `"${cleanTime.replace(/"/g, '""')}"`,
+      `"${adminUser.replace(/"/g, '""')}"`,
+      `"${actionLabel.replace(/"/g, '""')}"`,
+      `"${cleanDesc.replace(/"/g, '""')}"`,
+      `"${category.replace(/"/g, '""')}"`,
+      `"${target.replace(/"/g, '""')}"`
+    ].join(",");
+  });
+
+  const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10);
+  const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+  link.setAttribute("href", url);
+  link.setAttribute("download", `Nhat_Ky_Quan_Tri_${dateStr}_${timeStr}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  return true;
+};
+
+// Xuất báo cáo Người dùng & Doanh thu Hội viên ra file CSV (chuẩn UTF-8 BOM hiển thị tiếng Việt trên Excel)
+export const exportUsersAndRevenueToCSV = async () => {
+  const headers = getAdminHeaders();
+  const fetchOptions = {
+    method: "GET",
+    credentials: "include",
+    headers,
+  };
+
+  try {
+    const [usersRes, subsRes] = await Promise.all([
+      fetch(`${API_URL}/api/admin/users`, fetchOptions),
+      fetch(`${API_URL}/api/admin/subscriptions`, fetchOptions),
+    ]);
+
+    const users = usersRes.ok ? await usersRes.json() : [];
+    const subs = subsRes.ok ? await subsRes.json() : [];
+
+    if (!Array.isArray(users) || users.length === 0) {
+      alert("Không có dữ liệu người dùng để xuất.");
+      return false;
+    }
+
+    const csvHeaders = [
+      "STT",
+      "ID",
+      "Họ tên",
+      "Tài khoản Threads",
+      "Vai trò",
+      "Trạng thái",
+      "Thời hạn khóa",
+      "Lý do khóa",
+      "Gói hội viên",
+      "Trạng thái VIP",
+      "Hạn VIP còn lại",
+      "Ngày bắt đầu VIP",
+      "Ngày hết hạn VIP",
+      "Số bài đã phân tích",
+      "Ngày đăng ký",
+      "Lần đăng nhập cuối",
+    ];
+
+    const rows = users.map((u, index) => {
+      const userSub = Array.isArray(subs)
+        ? subs.find((s) => s.userId === u.id || s.username === u.username)
+        : null;
+
+      const roleLabel = u.role === "ADMIN" ? "Quản trị viên" : "Người dùng";
+      const statusLabel = u.status === "ACTIVE" ? "Hoạt động" : "Bị khóa";
+      
+      let lockDuration = "";
+      if (u.status === "BLOCKED") {
+        if (!u.blockedUntil) {
+          lockDuration = "Vĩnh viễn";
+        } else {
+          lockDuration = `Đến ${formatExactDateTime(u.blockedUntil)}`;
+        }
+      }
+
+      const planName = userSub
+        ? (userSub.planName || userSub.planCode)
+        : (u.role === "ADMIN" ? "Gói Quản trị" : "Gói Free");
+
+      const subStatus = userSub
+        ? (userSub.status === "ACTIVE" ? "Đang hiệu lực" : userSub.status)
+        : "Không có";
+
+      const daysRemaining = userSub?.daysRemaining != null
+        ? `${userSub.daysRemaining} ngày`
+        : "0 ngày";
+
+      const startAtStr = userSub?.startAt ? formatExactDateTime(userSub.startAt) : "";
+      const endAtStr = userSub?.endAt ? formatExactDateTime(userSub.endAt) : "";
+      const createdAtStr = u.createdAt ? formatExactDateTime(u.createdAt) : "";
+      const lastLoginStr = u.lastLoginAt ? formatExactDateTime(u.lastLoginAt) : "Chưa đăng nhập";
+
+      return [
+        index + 1,
+        u.id,
+        `"${(u.name || '').replace(/"/g, '""')}"`,
+        `"${(u.username ? '@' + u.username : (u.threadsUserId ? '@' + u.threadsUserId : '')).replace(/"/g, '""')}"`,
+        `"${roleLabel}"`,
+        `"${statusLabel}"`,
+        `"${lockDuration.replace(/"/g, '""')}"`,
+        `"${(u.blockReason || '').replace(/"/g, '""')}"`,
+        `"${planName.replace(/"/g, '""')}"`,
+        `"${subStatus}"`,
+        `"${daysRemaining}"`,
+        `"${startAtStr}"`,
+        `"${endAtStr}"`,
+        u.postsAnalyzedCount || 0,
+        `"${createdAtStr}"`,
+        `"${lastLoginStr}"`,
+      ].join(",");
+    });
+
+    const csvContent = "\uFEFF" + [csvHeaders.join(","), ...rows].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Bao_Cao_Nguoi_Dung_Doanh_Thu_${dateStr}_${timeStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    return true;
+  } catch (err) {
+    console.error("Lỗi xuất báo cáo người dùng & doanh thu:", err);
+    alert("Có lỗi khi xuất file: " + err.message);
+    return false;
+  }
+};
+
 // Lấy toàn bộ số liệu cho Admin Dashboard (hỗ trợ lọc thời gian thực tế từ backend)
 export const getAdminDashboardData = async ({ days = null } = {}) => {
   const headers = getAdminHeaders();

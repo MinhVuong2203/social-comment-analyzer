@@ -22,7 +22,8 @@ import {
   Activity,
   Cpu,
   Zap,
-  CheckCircle2
+  CheckCircle2,
+  Download
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -30,6 +31,8 @@ import {
   getChartAnalysisStats,
   getAdminAuditLogs,
   getAiHealthStatus,
+  exportAuditLogsToCSV,
+  exportUsersAndRevenueToCSV,
   formatCompactNumber, 
   formatCurrency,
   formatRelativeTime,
@@ -136,6 +139,18 @@ export default function AdminDashboardPage() {
   // State Giám sát hiệu năng AI (AI Latency & Health)
   const [liveAiHealth, setLiveAiHealth] = useState(null);
   const [isPingingAi, setIsPingingAi] = useState(false);
+
+  // State Xuất báo cáo Người dùng & Doanh thu
+  const [isExportingUsers, setIsExportingUsers] = useState(false);
+
+  const handleExportUsers = async () => {
+    setIsExportingUsers(true);
+    try {
+      await exportUsersAndRevenueToCSV();
+    } finally {
+      setIsExportingUsers(false);
+    }
+  };
 
   const activeAiHealth = liveAiHealth || dashboardData.aiHealth;
 
@@ -403,9 +418,19 @@ export default function AdminDashboardPage() {
         {/* Nút hành động header */}
         <div className="flex items-center space-x-2">
           <button
+            onClick={handleExportUsers}
+            disabled={isExportingUsers}
+            className="flex items-center space-x-1 px-2.5 py-1 bg-[#4cd7f6]/10 hover:bg-[#4cd7f6]/20 text-[#4cd7f6] rounded border border-[#4cd7f6]/30 transition text-[11px] disabled:opacity-50 cursor-pointer"
+            title="Xuất toàn bộ báo cáo Người dùng & Doanh thu Hội viên ra file CSV (Excel)"
+          >
+            <Download size={12} className={isExportingUsers ? "animate-spin" : ""} />
+            <span className="hidden sm:inline">{isExportingUsers ? "Đang xuất..." : "Xuất báo cáo"}</span>
+          </button>
+
+          <button
             onClick={() => loadData(true)}
             disabled={loading || refreshing}
-            className="flex items-center space-x-1 px-2 py-1 bg-white/5 hover:bg-white/10 text-[#94a3b8] hover:text-white rounded border border-white/10 transition text-[11px] disabled:opacity-50"
+            className="flex items-center space-x-1 px-2 py-1 bg-white/5 hover:bg-white/10 text-[#94a3b8] hover:text-white rounded border border-white/10 transition text-[11px] disabled:opacity-50 cursor-pointer"
             title="Làm mới dữ liệu"
           >
             <RefreshCw size={12} className={refreshing ? "animate-spin text-[#4cd7f6]" : ""} />
@@ -414,7 +439,7 @@ export default function AdminDashboardPage() {
 
           <button
             onClick={handleLogout}
-            className="flex items-center space-x-1 px-2.5 py-1 bg-[#93000a]/20 hover:bg-[#93000a]/40 text-[#ffb4ab] rounded border border-[#ffb4ab]/30 transition text-[11px]"
+            className="flex items-center space-x-1 px-2.5 py-1 bg-[#93000a]/20 hover:bg-[#93000a]/40 text-[#ffb4ab] rounded border border-[#ffb4ab]/30 transition text-[11px] cursor-pointer"
             title="Đăng xuất"
           >
             <LogOut size={12} />
@@ -809,12 +834,23 @@ export default function AdminDashboardPage() {
                 </span>
               )}
             </div>
-            <button 
-              onClick={() => navigate('/admin/users')}
-              className="text-[10px] text-[#4cd7f6] hover:underline"
-            >
-              Xem hết →
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={handleExportUsers}
+                disabled={isExportingUsers}
+                className="text-[10px] text-[#4cd7f6] hover:text-[#7ce5f8] hover:underline flex items-center space-x-1 cursor-pointer font-['JetBrains_Mono'] transition-colors disabled:opacity-50"
+                title="Xuất toàn bộ danh sách người dùng & doanh thu hội viên ra file CSV"
+              >
+                <Download size={10} className={isExportingUsers ? "animate-spin" : ""} />
+                <span>{isExportingUsers ? "Đang xuất..." : "Xuất CSV"}</span>
+              </button>
+              <button 
+                onClick={() => navigate('/admin/users')}
+                className="text-[10px] text-[#94a3b8] hover:text-white hover:underline transition-colors cursor-pointer"
+              >
+                Xem hết →
+              </button>
+            </div>
           </div>
 
           <div className="divide-y divide-white/5">
@@ -1232,12 +1268,22 @@ export default function AdminDashboardPage() {
               <span className="text-[#94a3b8] font-['JetBrains_Mono'] text-[11px]">
                 Hiển thị <span className="text-white font-semibold">{filteredModalLogs.length}</span> / {allAuditLogs.length} hoạt động
               </span>
-              <button
-                onClick={() => setShowAuditModal(false)}
-                className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white transition-colors cursor-pointer text-[11px] font-medium"
-              >
-                Đóng
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => exportAuditLogsToCSV(filteredModalLogs.length > 0 ? filteredModalLogs : allAuditLogs)}
+                  className="px-3 py-1.5 rounded-lg bg-[#4cd7f6]/15 hover:bg-[#4cd7f6]/25 text-[#4cd7f6] border border-[#4cd7f6]/40 flex items-center space-x-1.5 transition-colors cursor-pointer text-[11px] font-medium"
+                  title="Xuất danh sách nhật ký hoạt động ra file CSV (chuẩn tiếng Việt có dấu cho Excel)"
+                >
+                  <Download size={13} />
+                  <span>Xuất lịch sử (.CSV)</span>
+                </button>
+                <button
+                  onClick={() => setShowAuditModal(false)}
+                  className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white transition-colors cursor-pointer text-[11px] font-medium"
+                >
+                  Đóng
+                </button>
+              </div>
             </div>
           </div>
         </div>
