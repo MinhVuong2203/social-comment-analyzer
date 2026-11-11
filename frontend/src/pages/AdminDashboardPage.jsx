@@ -1,14 +1,56 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   CreditCard, 
   LogOut, 
-  ChevronRight
+  ChevronRight,
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { 
+  getAdminDashboardData, 
+  formatCompactNumber, 
+  formatCurrency 
+} from '../services/adminDashboardService';
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
+
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+  const [dashboardData, setDashboardData] = useState({
+    totalUsers: 0,
+    activeSubscriptions: 0,
+    totalRevenue: 0,
+    totalCommentsAnalyzed: 0,
+    recentUsers: [],
+    planDistribution: [],
+    planCount: 3,
+    isBackendConnected: false
+  });
+
+  const loadData = async (isManual = false) => {
+    if (isManual) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+
+    try {
+      const data = await getAdminDashboardData();
+      setDashboardData(data);
+    } catch (err) {
+      console.error("Lỗi tải dữ liệu Admin Dashboard:", err);
+      setError("Không thể tải toàn bộ dữ liệu mới nhất. Đang hiển thị bản lưu.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const handleLogout = () => {
     sessionStorage.removeItem('admin_auth');
@@ -16,26 +58,34 @@ export default function AdminDashboardPage() {
     navigate('/admin/login');
   };
 
-  // Mock data tóm tắt
+  // Tính tổng số user trong phân bổ gói để làm cơ sở tính %
+  const totalDistributionUsers = dashboardData.planDistribution.reduce(
+    (sum, p) => sum + (Number(p.users) || 0), 
+    0
+  ) || dashboardData.totalUsers || 1;
+
+  // 4 thẻ chỉ số tóm tắt
   const summaryMetrics = [
-    { label: 'Tổng User', value: '2,845', change: '+12%' },
-    { label: 'Gói Active', value: '1,420', change: '+8%' },
-    { label: 'Doanh thu', value: '48.5M ₫', change: '+15%' },
-    { label: 'Lượt PhoBERT', value: '184.2K', change: '+24%' }
-  ];
-
-  // Mock users mới nhất
-  const recentUsers = [
-    { id: 'U01', name: 'Hoàng Nguyễn', threads: '@hoang_tech', plan: 'PRO', time: 'Vừa xong' },
-    { id: 'U02', name: 'Thuỷ Trần', threads: '@thuy_mkt', plan: 'ENTERPRISE', time: '15p trước' },
-    { id: 'U03', name: 'Minh Quân', threads: '@quan_cr', plan: 'FREE', time: '1h trước' },
-  ];
-
-  // Mock phân bổ gói
-  const plans = [
-    { name: 'Gói Free (Dùng thử)', users: 1425, color: '#908fa0' },
-    { name: 'Gói Pro (Cá nhân)', users: 1180, color: '#c0c1ff' },
-    { name: 'Gói Enterprise', users: 240, color: '#4edea3' },
+    { 
+      label: 'Tổng User', 
+      value: loading ? '...' : formatCompactNumber(dashboardData.totalUsers), 
+      change: '+12%' 
+    },
+    { 
+      label: 'Gói Active', 
+      value: loading ? '...' : formatCompactNumber(dashboardData.activeSubscriptions), 
+      change: '+8%' 
+    },
+    { 
+      label: 'Doanh thu', 
+      value: loading ? '...' : formatCurrency(dashboardData.totalRevenue), 
+      change: '+15%' 
+    },
+    { 
+      label: 'Lượt PhoBERT', 
+      value: loading ? '...' : formatCompactNumber(dashboardData.totalCommentsAnalyzed), 
+      change: '+24%' 
+    }
   ];
 
   return (
@@ -59,25 +109,51 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* Nút Đăng xuất */}
-        <button
-          onClick={handleLogout}
-          className="flex items-center space-x-1 px-2.5 py-1 bg-[#93000a]/20 hover:bg-[#93000a]/40 text-[#ffb4ab] rounded border border-[#ffb4ab]/30 transition text-[11px]"
-          title="Đăng xuất"
-        >
-          <LogOut size={12} />
-          <span>Đăng xuất</span>
-        </button>
+        {/* Nút hành động header */}
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => loadData(true)}
+            disabled={loading || refreshing}
+            className="flex items-center space-x-1 px-2 py-1 bg-white/5 hover:bg-white/10 text-[#94a3b8] hover:text-white rounded border border-white/10 transition text-[11px] disabled:opacity-50"
+            title="Làm mới dữ liệu"
+          >
+            <RefreshCw size={12} className={refreshing ? "animate-spin text-[#4cd7f6]" : ""} />
+            <span className="hidden sm:inline">Làm mới</span>
+          </button>
+
+          <button
+            onClick={handleLogout}
+            className="flex items-center space-x-1 px-2.5 py-1 bg-[#93000a]/20 hover:bg-[#93000a]/40 text-[#ffb4ab] rounded border border-[#ffb4ab]/30 transition text-[11px]"
+            title="Đăng xuất"
+          >
+            <LogOut size={12} />
+            <span>Đăng xuất</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Container */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 pb-8">
+        {/* Banner cảnh báo nếu có lỗi */}
+        {error && (
+          <div className="bg-[#93000a]/20 border border-[#ffb4ab]/30 rounded-lg p-2 flex items-center space-x-2 text-[#ffb4ab] text-[11px]">
+            <AlertCircle size={14} className="shrink-0" />
+            <span className="flex-1">{error}</span>
+            <button 
+              onClick={() => loadData(true)} 
+              className="underline hover:text-white font-medium"
+            >
+              Thử lại
+            </button>
+          </div>
+        )}
+
         {/* Grid 4 chỉ số tóm tắt (2x2) */}
         <div className="grid grid-cols-2 gap-2">
           {summaryMetrics.map((item, idx) => (
             <div 
               key={idx}
-              className="bg-[#1a1a2e] border border-white/10 rounded-lg p-2.5 flex flex-col justify-between shadow-xs"
+              className="bg-[#1a1a2e] border border-white/10 rounded-lg p-2.5 flex flex-col justify-between shadow-xs hover:border-white/20 transition"
             >
               <div className="flex items-center justify-between text-[#94a3b8]">
                 <span className="text-[10px]">{item.label}</span>
@@ -112,7 +188,7 @@ export default function AdminDashboardPage() {
                   Quản lý Người dùng
                 </div>
                 <div className="text-[10px] text-[#94a3b8]">
-                  Xem danh sách 2,845 user & tài khoản Threads
+                  {/* Xem danh sách {loading ? '...' : formatCompactNumber(dashboardData.totalUsers)} user & tài khoản Threads */}
                 </div>
               </div>
             </div>
@@ -133,7 +209,7 @@ export default function AdminDashboardPage() {
                   Quản lý Gói đăng ký
                 </div>
                 <div className="text-[10px] text-[#94a3b8]">
-                  Cấu hình 3 gói (Free, Pro, Enterprise)
+                  {/* Cấu hình {dashboardData.planCount} gói (Free, VIP 30 ngày, VIP 90 ngày,...) */}
                 </div>
               </div>
             </div>
@@ -154,7 +230,7 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="divide-y divide-white/5">
-            {recentUsers.map((u) => (
+            {dashboardData.recentUsers.map((u) => (
               <div key={u.id} className="py-1.5 flex items-center justify-between text-[11px]">
                 <div>
                   <span className="font-medium text-white">{u.name}</span>
@@ -177,26 +253,36 @@ export default function AdminDashboardPage() {
         <div className="bg-[#1a1a2e] border border-white/10 rounded-lg p-2.5 space-y-2">
           <div className="flex items-center justify-between border-b border-white/10 pb-1.5">
             <span className="font-semibold text-[11px] text-[#f1f5f9]">Phân bổ hội viên</span>
-            <span className="text-[10px] text-[#4edea3]">Tổng: 2,845</span>
+            <span className="text-[10px] text-[#4edea3]">
+              Tổng: {loading ? '...' : formatCompactNumber(dashboardData.totalUsers)}
+            </span>
           </div>
           <div className="space-y-2 text-[10px]">
-            {plans.map((p, i) => (
-              <div key={i} className="space-y-0.5">
-                <div className="flex justify-between text-[#94a3b8]">
-                  <span>{p.name}</span>
-                  <span className="font-['JetBrains_Mono'] text-white">{p.users} user</span>
+            {dashboardData.planDistribution.map((p, i) => {
+              const percentage = totalDistributionUsers > 0 
+                ? Math.min(100, Math.round((p.users / totalDistributionUsers) * 100)) 
+                : 0;
+
+              return (
+                <div key={i} className="space-y-0.5">
+                  <div className="flex justify-between text-[#94a3b8]">
+                    <span>{p.name}</span>
+                    <span className="font-['JetBrains_Mono'] text-white">
+                      {p.users.toLocaleString('vi-VN')} user ({percentage}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-[#0d0d14] h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ 
+                        width: `${percentage}%`,
+                        backgroundColor: p.color
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className="w-full bg-[#0d0d14] h-1.5 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full rounded-full"
-                    style={{ 
-                      width: `${(p.users / 2845) * 100}%`,
-                      backgroundColor: p.color
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
