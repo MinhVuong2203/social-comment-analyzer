@@ -15,6 +15,7 @@ import OverviewPage from "../pages/OverviewPage";
 import CommentsPage from '../pages/CommentsPage';
 import StatisticsPage from '../pages/StatisticsPage';
 import ProfilePage from '../pages/ProfilePage';
+import SettingsPage from '../pages/SettingsPage';
 import Header from '../components/layout/Header';
 import { useAuth } from "../context/AuthContext";
 
@@ -67,6 +68,7 @@ function AppRouter() {
                     <Route path="/comments" element={<CommentsPage />} />
                     <Route path="/statistics" element={<StatisticsPage />} />
                     <Route path="/profile" element={<ProfilePage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
                     <Route path="*" element={<Navigate to="/overview" replace />} />
                 </Route>
 

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.social.backend.dto.*;
 import com.social.backend.entity.AnalysisResult;
 import com.social.backend.service.AnalysisService;
+import com.social.backend.service.UserLimitService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -43,9 +44,12 @@ class AnalysisControllerTest {
     @Mock
     private AnalysisService analysisService;
 
+    @Mock
+    private UserLimitService userLimitService;
+
     @BeforeEach
     void setUp() {
-        AnalysisController controller = new AnalysisController(analysisService);
+        AnalysisController controller = new AnalysisController(analysisService, userLimitService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
@@ -184,6 +188,7 @@ class AnalysisControllerTest {
                     Collections.emptyList()
             );
 
+            when(userLimitService.canAnalyze("user_123")).thenReturn(true);
             when(analysisService.analyzePost("post_123", "user_123", "token_abc"))
                     .thenReturn(mockResponse);
 

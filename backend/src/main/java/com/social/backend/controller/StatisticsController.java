@@ -3,6 +3,7 @@ package com.social.backend.controller;
 import com.social.backend.dto.StatisticsResponse;
 import com.social.backend.service.StatisticsExportService;
 import com.social.backend.service.StatisticsService;
+import com.social.backend.service.UserLimitService;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -16,19 +17,24 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/statistics/posts/{postId}")
 public class StatisticsController {
 
     private final StatisticsService statisticsService;
     private final StatisticsExportService statisticsExportService;
+    private final UserLimitService userLimitService;
 
     public StatisticsController(
             StatisticsService statisticsService,
-            StatisticsExportService statisticsExportService
+            StatisticsExportService statisticsExportService,
+            UserLimitService userLimitService
     ) {
         this.statisticsService = statisticsService;
         this.statisticsExportService = statisticsExportService;
+        this.userLimitService = userLimitService;
     }
 
     /**
@@ -47,14 +53,29 @@ public class StatisticsController {
      * GET /api/statistics/posts/{postId}/export?format=csv|json|xlsx
      */
     @GetMapping("/export")
-    public ResponseEntity<byte[]> export(
+    public ResponseEntity<?> export(
             @PathVariable String postId,
             @RequestParam String format,
             HttpSession session
     ) {
         String userId = requireUserId(session);
+
+        // Kiểm tra giới hạn xuất báo cáo hàng ngày (chỉ áp dụng non-VIP và non-Admin)
+        if (!userLimitService.canExport(userId)) {
+            int limit = userLimitService.getDailyExportLimit();
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of(
+                "error", "QUOTA_EXCEEDED",
+                "message", "Bạn đã đạt giới hạn " + limit + " lần xuất báo cáo trong ngày hôm nay. Nâng cấp VIP để xuất không giới hạn.",
+                "limit", limit,
+                "remaining", 0
+            ));
+        }
+
         StatisticsExportService.Format exportFormat = StatisticsExportService.Format.parse(format);
         byte[] file = statisticsExportService.export(postId, userId, exportFormat);
+
+        // Ghi log xuất báo cáo
+        userLimitService.logExport(userId, postId, format);
 
         String safePostId = postId.replaceAll("[^A-Za-z0-9_-]", "");
         ContentDisposition disposition = ContentDisposition.attachment()
