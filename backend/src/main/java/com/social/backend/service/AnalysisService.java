@@ -264,9 +264,9 @@ public class AnalysisService {
                         c.getText(),
                         c.getUsername(),
                         c.getThreadsTimestamp(),
-                        p != null ? new CommentAnalysisDto.TaskSummary(p.getToxicityLabel(), p.getToxicityConfidence()) : null,
-                        p != null ? new CommentAnalysisDto.TaskSummary(p.getHateSpeechLabel(), p.getHateSpeechConfidence()) : null,
-                        p != null ? new CommentAnalysisDto.TaskSummary(p.getSentimentLabel(), p.getSentimentConfidence()) : null,
+                        p != null ? new CommentAnalysisDto.TaskSummary(p.getToxicityLabel(), p.getToxicityConfidence() != null ? p.getToxicityConfidence() : 0.0) : null,
+                        p != null ? new CommentAnalysisDto.TaskSummary(p.getHateSpeechLabel(), p.getHateSpeechConfidence() != null ? p.getHateSpeechConfidence() : 0.0) : null,
+                        p != null ? new CommentAnalysisDto.TaskSummary(p.getSentimentLabel(), p.getSentimentConfidence() != null ? p.getSentimentConfidence() : 0.0) : null,
                         c.getParentId(),
                         c.getIsReply() != null ? c.getIsReply() : false
                 );
