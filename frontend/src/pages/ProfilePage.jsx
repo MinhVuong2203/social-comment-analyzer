@@ -298,32 +298,10 @@ export default function ProfilePage() {
             <div>
               <h3 className="font-bold text-white text-[13px] flex items-center space-x-1.5">
                 <Sparkles size={14} className="text-[#ffd700]" />
-                <span>Nâng cấp Gói VIP (Cổng PayOS)</span>
+                <span>Nâng cấp Gói VIP</span>
               </h3>
-              <p className="text-[10px] text-[#94a3b8]">
-                Mở khóa phân tích sâu, quét không giới hạn bình luận Threads
-              </p>
             </div>
           </div>
-
-          {/* Banner thông báo nếu đã là VIP */}
-          {isVip && (
-            <div className="bg-amber-400/10 border border-amber-400/30 rounded-xl p-3 flex items-start space-x-2.5 text-amber-200">
-              <Crown size={16} className="text-[#ffd700] shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold text-[12px] text-white">
-                  Tài khoản của bạn hiện đang có gói VIP còn hiệu lực
-                </p>
-                <p className="text-[11px] text-[#cbd5e1] mt-0.5">
-                  Gói hiện tại: <strong className="text-white">{activeSub?.planName || 'Gói VIP'}</strong>
-                  {activeSub?.daysRemaining !== undefined && (
-                    <span> (còn lại <strong className="text-[#ffd700]">{activeSub.daysRemaining} ngày</strong>)</span>
-                  )}. 
-                  Bạn không cần và không thể mua thêm gói mới khi gói hiện tại vẫn còn thời hạn.
-                </p>
-              </div>
-            </div>
-          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
             {profileData?.availablePlans?.map((plan) => {
@@ -342,17 +320,6 @@ export default function ProfilePage() {
                       : 'border-white/10 hover:border-[#c0c1ff]/50 hover:shadow-xl'
                   }`}
                 >
-                  {isBest && (
-                    <div className="absolute -top-2.5 right-3 bg-[#c0c1ff] text-[#1000a9] text-[8px] font-bold font-['JetBrains_Mono'] px-2 py-0.5 rounded-full shadow">
-                      PHỔ BIẾN NHẤT
-                    </div>
-                  )}
-
-                  {isPro && (
-                    <div className="absolute -top-2.5 right-3 bg-[#ffd700] text-[#0d0d14] text-[8px] font-bold font-['JetBrains_Mono'] px-2 py-0.5 rounded-full shadow">
-                      TIẾT KIỆM 35%
-                    </div>
-                  )}
 
                   <div className="space-y-2">
                     <div>
@@ -374,10 +341,6 @@ export default function ProfilePage() {
                       <div className="flex items-center space-x-1.5">
                         <Check size={12} className="text-[#10b981] shrink-0" />
                         <span>Quét không giới hạn bài viết Threads</span>
-                      </div>
-                      <div className="flex items-center space-x-1.5">
-                        <Check size={12} className="text-[#10b981] shrink-0" />
-                        <span>AI PhoBERT nhận diện tiếng lóng, mỉa mai</span>
                       </div>
                       <div className="flex items-center space-x-1.5">
                         <Check size={12} className="text-[#10b981] shrink-0" />

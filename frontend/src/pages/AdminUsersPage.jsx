@@ -10,19 +10,31 @@ import {
   CheckCircle2, 
   X, 
   Info,
-  RefreshCw
+  RefreshCw,
+  Filter,
+  Crown,
+  Calendar,
+  RotateCcw
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getAdminUsers, lockUser, unlockUser } from '../services/adminUserService';
+import { getUserSubscriptions, getVipPlans } from '../services/adminSubscriptionService';
 
 export default function AdminUsersPage() {
   const navigate = useNavigate();
 
   const [users, setUsers] = useState([]);
+  const [availablePlans, setAvailablePlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState(null);
+
+  // Filter & Search States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, ACTIVE, BLOCKED
+  const [vipFilter, setVipFilter] = useState('ALL'); // ALL, VIP, FREE, or specific planCode
+  const [dateFilter, setDateFilter] = useState('ALL'); // ALL, TODAY, 7_DAYS, 30_DAYS
+  const [sortOrder, setSortOrder] = useState('NEWEST'); // NEWEST, OLDEST
 
   // Modal State for Lock User
   const [lockModalUser, setLockModalUser] = useState(null);
@@ -36,8 +48,38 @@ export default function AdminUsersPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getAdminUsers();
-      setUsers(Array.isArray(data) ? data : []);
+      const [usersData, subsData, plansData] = await Promise.all([
+        getAdminUsers().catch(err => {
+          console.warn("Lỗi getAdminUsers:", err.message);
+          return [];
+        }),
+        getUserSubscriptions().catch(() => []),
+        getVipPlans().catch(() => [])
+      ]);
+
+      setAvailablePlans(Array.isArray(plansData) ? plansData : []);
+
+      // Ghép thông tin gói VIP vào từng user
+      const mappedUsers = (Array.isArray(usersData) ? usersData : []).map(u => {
+        const userSub = Array.isArray(subsData) 
+          ? subsData.find(s => s.userId === u.id || s.username === u.username)
+          : null;
+
+        const isVip = userSub && userSub.status === 'ACTIVE';
+        const vipPlanName = isVip ? (userSub.planName || userSub.planCode) : 'Gói Free';
+        const vipPlanCode = isVip ? userSub.planCode : 'FREE';
+
+        return {
+          ...u,
+          isVip,
+          vipPlanName,
+          vipPlanCode,
+          vipDaysRemaining: userSub?.daysRemaining ?? null,
+          vipEndAt: userSub?.endAt ?? null
+        };
+      });
+
+      setUsers(mappedUsers);
     } catch (err) {
       setError(err.message || 'Không thể tải danh sách người dùng.');
     } finally {
@@ -98,14 +140,76 @@ export default function AdminUsersPage() {
     }
   };
 
+  const isWithinDays = (dateStr, days) => {
+    if (!dateStr) return false;
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return false;
+    const now = new Date();
+    const diffDays = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24);
+    return diffDays <= days && diffDays >= 0;
+  };
+
+  const isToday = (dateStr) => {
+    if (!dateStr) return false;
+    const date = new Date(dateStr);
+    const now = new Date();
+    return date.toDateString() === now.toDateString();
+  };
+
+  const hasActiveFilters = searchQuery.trim() !== '' || statusFilter !== 'ALL' || vipFilter !== 'ALL' || dateFilter !== 'ALL' || sortOrder !== 'NEWEST';
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('ALL');
+    setVipFilter('ALL');
+    setDateFilter('ALL');
+    setSortOrder('NEWEST');
+  };
+
+  // Logic lọc và sắp xếp người dùng
   const filteredUsers = users.filter((u) => {
+    // 1. Text search
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return true;
-    return (
-      (u.name && u.name.toLowerCase().includes(q)) ||
-      (u.username && u.username.toLowerCase().includes(q)) ||
-      (u.threadsUserId && u.threadsUserId.toLowerCase().includes(q))
-    );
+    if (q) {
+      const match = (u.name && u.name.toLowerCase().includes(q)) ||
+        (u.username && u.username.toLowerCase().includes(q)) ||
+        (u.threadsUserId && u.threadsUserId.toLowerCase().includes(q)) ||
+        (u.vipPlanName && u.vipPlanName.toLowerCase().includes(q));
+      if (!match) return false;
+    }
+
+    // 2. Status filter
+    if (statusFilter !== 'ALL' && u.status !== statusFilter) {
+      return false;
+    }
+
+    // 3. VIP filter
+    if (vipFilter === 'VIP' && !u.isVip) {
+      return false;
+    }
+    if (vipFilter === 'FREE' && u.isVip) {
+      return false;
+    }
+    if (vipFilter !== 'ALL' && vipFilter !== 'VIP' && vipFilter !== 'FREE' && u.vipPlanCode !== vipFilter) {
+      return false;
+    }
+
+    // 4. Date filter
+    if (dateFilter === 'TODAY' && !isToday(u.createdAt)) {
+      return false;
+    }
+    if (dateFilter === '7_DAYS' && !isWithinDays(u.createdAt, 7)) {
+      return false;
+    }
+    if (dateFilter === '30_DAYS' && !isWithinDays(u.createdAt, 30)) {
+      return false;
+    }
+
+    return true;
+  }).sort((a, b) => {
+    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return sortOrder === 'NEWEST' ? timeB - timeA : timeA - timeB;
   });
 
   return (
@@ -146,16 +250,93 @@ export default function AdminUsersPage() {
 
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5 pb-8 max-w-4xl mx-auto w-full">
-        {/* Search */}
+        {/* Search Bar */}
         <div className="relative">
           <Search size={13} className="absolute left-2.5 top-2.5 text-[#94a3b8]" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm theo tên, @username, Threads ID..."
+            placeholder="Tìm theo tên, @username, Threads ID, tên gói VIP..."
             className="w-full h-8 pl-8 pr-3 bg-[#1a1a2e] border border-white/10 rounded-lg text-xs text-white placeholder:text-[#94a3b8] focus:outline-none focus:border-[#4cd7f6] transition"
           />
+        </div>
+
+        {/* Thanh Bộ Lọc Nâng Cao */}
+        <div className="bg-[#1a1a2e]/90 border border-white/10 rounded-lg p-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[#94a3b8] flex items-center space-x-1 mr-1">
+              <Filter size={11} />
+              <span>Bộ lọc:</span>
+            </span>
+
+            {/* Lọc Trạng Thái */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-[#121221] border border-white/10 text-white rounded px-2 py-1 text-[10px] focus:outline-none focus:border-[#4cd7f6]"
+            >
+              <option value="ALL">Tất cả trạng thái</option>
+              <option value="ACTIVE">🟢 Đang hoạt động</option>
+              <option value="BLOCKED">🔴 Đang bị khóa</option>
+            </select>
+
+            {/* Lọc Gói VIP */}
+            <select
+              value={vipFilter}
+              onChange={(e) => setVipFilter(e.target.value)}
+              className="bg-[#121221] border border-white/10 text-white rounded px-2 py-1 text-[10px] focus:outline-none focus:border-[#f59e0b]"
+            >
+              <option value="ALL">Tất cả gói</option>
+              <option value="VIP">👑 Có VIP (Active)</option>
+              <option value="FREE">Gói Free (Dùng thử)</option>
+              {availablePlans.map(p => (
+                <option key={p.id || p.planCode} value={p.planCode}>
+                  {p.planName || p.planCode}
+                </option>
+              ))}
+            </select>
+
+            {/* Lọc Ngày Tham Gia */}
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="bg-[#121221] border border-white/10 text-white rounded px-2 py-1 text-[10px] focus:outline-none focus:border-[#4edea3]"
+            >
+              <option value="ALL">Mọi ngày tham gia</option>
+              <option value="TODAY">Tham gia hôm nay</option>
+              <option value="7_DAYS">Trong 7 ngày qua</option>
+              <option value="30_DAYS">Trong 30 ngày qua</option>
+            </select>
+
+            {/* Sắp Xếp */}
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+              className="bg-[#121221] border border-white/10 text-white rounded px-2 py-1 text-[10px] focus:outline-none focus:border-[#c0c1ff]"
+            >
+              <option value="NEWEST">Mới tham gia nhất</option>
+              <option value="OLDEST">Tham gia lâu nhất</option>
+            </select>
+          </div>
+
+          {/* Reset button & đếm kết quả */}
+          <div className="flex items-center space-x-2">
+            <span className="text-[10px] font-['JetBrains_Mono'] text-[#94a3b8]">
+              {filteredUsers.length} / {users.length} user
+            </span>
+
+            {hasActiveFilters && (
+              <button
+                onClick={resetFilters}
+                className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-[#4cd7f6] hover:text-white border border-white/10 transition text-[10px] flex items-center space-x-1"
+                title="Đặt lại toàn bộ bộ lọc"
+              >
+                <RotateCcw size={10} />
+                <span>Đặt lại</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Error Notification */}
@@ -179,7 +360,15 @@ export default function AdminUsersPage() {
           <div className="bg-[#1a1a2e]/60 border border-white/5 rounded-xl p-8 text-center text-[#94a3b8]">
             <Users size={28} className="mx-auto mb-2 opacity-40" />
             <p className="text-[12px] font-medium text-white/80">Không tìm thấy người dùng nào</p>
-            <p className="text-[10px] mt-0.5">Thử tìm kiếm với từ khóa khác hoặc kiểm tra lại kết nối cơ sở dữ liệu.</p>
+            <p className="text-[10px] mt-0.5">Thử nới lỏng từ khóa hoặc bộ lọc tìm kiếm.</p>
+            {hasActiveFilters && (
+              <button
+                onClick={resetFilters}
+                className="mt-3 px-3 py-1 bg-[#4cd7f6]/20 hover:bg-[#4cd7f6]/30 text-[#4cd7f6] border border-[#4cd7f6]/30 rounded-lg text-xs font-medium transition"
+              >
+                Xóa tất cả bộ lọc
+              </button>
+            )}
           </div>
         )}
 
@@ -196,7 +385,7 @@ export default function AdminUsersPage() {
                   className={`bg-[#1a1a2e] border ${isBlocked ? 'border-[#93000a]/40 bg-[#1f1722]' : 'border-white/10'} rounded-lg p-2.5 flex items-center justify-between hover:border-white/20 transition`}
                 >
                   <div className="space-y-1 min-w-0 pr-3">
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
                       {u.profilePictureUrl ? (
                         <img 
                           src={u.profilePictureUrl} 
@@ -210,16 +399,29 @@ export default function AdminUsersPage() {
                         </div>
                       )}
                       
-                      <span className="font-semibold text-[12px] text-white truncate">
+                      <span className="font-semibold text-[12px] text-white truncate max-w-[150px]">
                         {u.name || u.username || 'Người dùng Threads'}
                       </span>
 
+                      {/* Badge Vai Trò */}
                       <span className={`text-[8px] font-['JetBrains_Mono'] px-1.5 py-0.2 rounded font-semibold ${
                         u.role === 'ADMIN' ? 'bg-[#ffb4ab]/15 text-[#ffb4ab] border border-[#ffb4ab]/30' :
                         'bg-[#c0c1ff]/15 text-[#c0c1ff] border border-[#c0c1ff]/30'
                       }`}>
                         {u.role || 'USER'}
                       </span>
+
+                      {/* Badge Tên Gói VIP */}
+                      {u.isVip ? (
+                        <span className="text-[9px] font-['JetBrains_Mono'] px-1.5 py-0.5 rounded font-semibold bg-[#f59e0b]/20 text-[#f59e0b] border border-[#f59e0b]/40 flex items-center space-x-0.5 shadow-xs">
+                          <span>👑</span>
+                          <span>{u.vipPlanName}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[8px] font-['JetBrains_Mono'] px-1.5 py-0.2 rounded text-[#94a3b8] bg-white/5 border border-white/10">
+                          {u.vipPlanName || 'Free'}
+                        </span>
+                      )}
                     </div>
 
                     <div className="text-[10px] text-[#4cd7f6] font-['JetBrains_Mono'] truncate">
@@ -241,6 +443,10 @@ export default function AdminUsersPage() {
                           • {u.blockedUntil ? `Hết hạn: ${formatDateTime(u.blockedUntil)}` : 'Khóa vĩnh viễn'}
                         </span>
                       )}
+
+                      <span>
+                        • Tham gia: {formatDateTime(u.createdAt)}
+                      </span>
 
                       <span>
                         • Đăng nhập: {formatDateTime(u.lastLoginAt)}
@@ -321,14 +527,14 @@ export default function AdminUsersPage() {
                     key={opt.id}
                     type="button"
                     onClick={() => setLockDuration(opt.id)}
-                    className={`p-2 rounded-lg border text-left transition flex flex-col ${
+                    className={`p-2 rounded-lg border text-left transition ${
                       lockDuration === opt.id 
-                        ? 'border-[#4cd7f6] bg-[#4cd7f6]/10 text-white' 
-                        : 'border-white/10 bg-[#121221] text-[#94a3b8] hover:border-white/20'
+                        ? 'bg-[#c0c1ff]/20 border-[#c0c1ff] text-white' 
+                        : 'bg-[#121221] border-white/10 text-[#94a3b8] hover:border-white/20'
                     }`}
                   >
-                    <span className="font-semibold text-[11px]">{opt.label}</span>
-                    <span className="text-[9px] opacity-70">{opt.desc}</span>
+                    <div className="font-semibold text-[11px]">{opt.label}</div>
+                    <div className="text-[9px] opacity-70">{opt.desc}</div>
                   </button>
                 ))}
               </div>
@@ -336,17 +542,16 @@ export default function AdminUsersPage() {
 
             {/* Lý do khóa */}
             <div className="space-y-1">
-              <label className="text-[11px] font-semibold text-[#c0c1ff] block">Lý do khóa (tùy chọn):</label>
+              <label className="text-[11px] font-semibold text-[#c0c1ff] block">Lý do khóa:</label>
               <input
                 type="text"
                 value={lockReason}
                 onChange={(e) => setLockReason(e.target.value)}
-                placeholder="VD: Vi phạm chính sách sử dụng, spam..."
-                className="w-full h-8 px-2.5 bg-[#121221] border border-white/10 rounded-lg text-xs text-white placeholder:text-[#64748b] focus:outline-none focus:border-[#4cd7f6]"
+                placeholder="Ví dụ: Vi phạm quy chuẩn bình luận, spam..."
+                className="w-full h-8 px-2.5 bg-[#121221] border border-white/10 rounded-lg text-xs text-white placeholder:text-[#94a3b8] focus:outline-none focus:border-[#ffb4ab]"
               />
             </div>
 
-            {/* Buttons */}
             <div className="flex items-center justify-end space-x-2 pt-2 border-t border-white/10">
               <button
                 type="button"
@@ -411,8 +616,21 @@ export default function AdminUsersPage() {
                   <span className="text-[#94a3b8]">Vai trò:</span>
                   <span className="text-white">{detailModalUser.role}</span>
                 </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[#94a3b8]">Gói VIP:</span>
+                  <span className={detailModalUser.isVip ? "text-[#f59e0b] font-bold flex items-center space-x-1" : "text-[#94a3b8]"}>
+                    {detailModalUser.isVip && <span>👑</span>}
+                    <span>{detailModalUser.vipPlanName}</span>
+                  </span>
+                </div>
+                {detailModalUser.isVip && detailModalUser.vipDaysRemaining !== null && (
+                  <div className="flex justify-between">
+                    <span className="text-[#94a3b8]">Hạn VIP còn lại:</span>
+                    <span className="text-[#4edea3]">{detailModalUser.vipDaysRemaining} ngày</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
-                  <span className="text-[#94a3b8]">Trạng thái:</span>
+                  <span className="text-[#94a3b8]">Trạng thái tài khoản:</span>
                   <span className={detailModalUser.status === 'BLOCKED' ? 'text-[#ffb4ab]' : 'text-[#4edea3]'}>
                     {detailModalUser.status}
                   </span>
