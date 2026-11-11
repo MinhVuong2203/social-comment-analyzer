@@ -197,14 +197,16 @@ public class AdminSubscriptionController {
     }
 
     /**
-     * Thống kê tổng quan gói VIP
+     * Thống kê tổng quan gói VIP (hỗ trợ lọc thời gian theo số ngày)
+     * GET /api/admin/subscriptions/stats?days=30
      */
     @GetMapping("/subscriptions/stats")
     public ResponseEntity<VipPlanDto.OverviewStats> getSubscriptionStats(
+            @RequestParam(required = false) Integer days,
             HttpServletRequest request,
             HttpSession session
     ) {
         validateAdmin(request, session);
-        return ResponseEntity.ok(subscriptionService.getOverviewStats());
+        return ResponseEntity.ok(subscriptionService.getOverviewStats(days));
     }
 }

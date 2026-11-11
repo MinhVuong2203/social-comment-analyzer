@@ -30,6 +30,7 @@ public class AdminSubscriptionService {
     private final UserSubscriptionRepository userSubscriptionRepository;
     private final PaymentTransactionRepository paymentTransactionRepository;
     private final UserRepository userRepository;
+    private final AdminAuditLogService auditLogService;
 
     /**
      * Khởi tạo các gói VIP mặc định từ Database Schema nếu bảng còn trống
@@ -118,7 +119,10 @@ public class AdminSubscriptionService {
                 .isActive(request.isActive() != null ? request.isActive() : true)
                 .build();
 
-        return vipPlanRepository.save(plan);
+        VipPlan saved = vipPlanRepository.save(plan);
+        auditLogService.log("admin", "CREATE_VIP_PLAN", "VIP_PLAN", saved.getPlanCode(),
+                "Tạo mới gói VIP '" + saved.getPlanName() + "' (Giá: " + saved.getPrice() + " đ, Thời hạn: " + saved.getDurationDays() + " ngày)");
+        return saved;
     }
 
     /**
@@ -143,7 +147,10 @@ public class AdminSubscriptionService {
             plan.setIsActive(request.isActive());
         }
 
-        return vipPlanRepository.save(plan);
+        VipPlan updated = vipPlanRepository.save(plan);
+        auditLogService.log("admin", "UPDATE_VIP_PLAN", "VIP_PLAN", updated.getPlanCode(),
+                "Cập nhật thông tin gói VIP '" + updated.getPlanName() + "'");
+        return updated;
     }
 
     /**
@@ -155,7 +162,10 @@ public class AdminSubscriptionService {
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy gói VIP ID: " + id));
 
         plan.setIsActive(!Boolean.TRUE.equals(plan.getIsActive()));
-        return vipPlanRepository.save(plan);
+        VipPlan saved = vipPlanRepository.save(plan);
+        auditLogService.log("admin", "TOGGLE_VIP_PLAN", "VIP_PLAN", saved.getPlanCode(),
+                (Boolean.TRUE.equals(saved.getIsActive()) ? "Kích hoạt" : "Vô hiệu hóa") + " gói VIP '" + saved.getPlanName() + "'");
+        return saved;
     }
 
     /**
@@ -171,7 +181,10 @@ public class AdminSubscriptionService {
             throw new IllegalStateException("Không thể xóa gói VIP đang có " + count + " hội viên hoạt động. Bạn có thể vô hiệu hóa gói này thay vì xóa.");
         }
 
+        String planName = plan.getPlanName();
         vipPlanRepository.delete(plan);
+        auditLogService.log("admin", "DELETE_VIP_PLAN", "VIP_PLAN", String.valueOf(id),
+                "Xóa gói VIP '" + planName + "' (ID: " + id + ")");
     }
 
     /**
@@ -241,7 +254,10 @@ public class AdminSubscriptionService {
             }
         }
 
-        return userSubscriptionRepository.save(sub);
+        UserSubscription saved = userSubscriptionRepository.save(sub);
+        auditLogService.log("admin", "UPDATE_SUB_STATUS", "SUBSCRIPTION", String.valueOf(id),
+                "Cập nhật trạng thái đăng ký VIP #" + id + " sang '" + upper + "'");
+        return saved;
     }
 
     /**
@@ -267,7 +283,10 @@ public class AdminSubscriptionService {
                 .endAt(end)
                 .build();
 
-        return userSubscriptionRepository.save(sub);
+        UserSubscription saved = userSubscriptionRepository.save(sub);
+        auditLogService.log("admin", "GRANT_VIP", "SUBSCRIPTION", String.valueOf(request.userId()),
+                "Cấp thủ công quyền VIP (" + plan.getPlanName() + ", " + duration + " ngày) cho User #" + request.userId());
+        return saved;
     }
 
     /**
@@ -279,20 +298,65 @@ public class AdminSubscriptionService {
     }
 
     /**
-     * Thống kê tổng quan về VIP
+     * Thống kê tổng quan về VIP (hỗ trợ lọc thời gian theo số ngày)
      */
     @Transactional(readOnly = true)
-    public VipPlanDto.OverviewStats getOverviewStats() {
+    public VipPlanDto.OverviewStats getOverviewStats(Integer days) {
         long totalPlans = vipPlanRepository.count();
         long activePlans = vipPlanRepository.findAll().stream().filter(p -> Boolean.TRUE.equals(p.getIsActive())).count();
-        long activeSubs = userSubscriptionRepository.countByStatus("ACTIVE");
-        long pendingSubs = userSubscriptionRepository.countByStatus("PENDING");
 
-        List<PaymentTransaction> payments = paymentTransactionRepository.findAll();
+        long activeSubs;
+        long pendingSubs;
+        List<PaymentTransaction> payments;
+
+        if (days != null && days > 0) {
+            OffsetDateTime since = OffsetDateTime.now().minusDays(days);
+            payments = paymentTransactionRepository.findByCreatedAtGreaterThanEqual(since);
+            activeSubs = userSubscriptionRepository.countByStatusAndCreatedAtGreaterThanEqual("ACTIVE", since);
+            pendingSubs = userSubscriptionRepository.countByStatusAndCreatedAtGreaterThanEqual("PENDING", since);
+        } else {
+            payments = paymentTransactionRepository.findAll();
+            activeSubs = userSubscriptionRepository.countByStatus("ACTIVE");
+            pendingSubs = userSubscriptionRepository.countByStatus("PENDING");
+        }
+
         BigDecimal totalRevenue = payments.stream()
                 .filter(p -> "SUCCESS".equalsIgnoreCase(p.getStatus()) && p.getAmount() != null)
                 .map(PaymentTransaction::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        Double revenueGrowthRate = null;
+        Double subscriptionsGrowthRate = null;
+
+        if (days != null && days > 0) {
+            OffsetDateTime now = OffsetDateTime.now();
+            OffsetDateTime currentStart = now.minusDays(days);
+            OffsetDateTime prevStart = now.minusDays(days * 2L);
+
+            // Tính tăng trưởng doanh thu so với kỳ trước
+            List<PaymentTransaction> prevPayments = paymentTransactionRepository.findByCreatedAtBetween(prevStart, currentStart);
+            BigDecimal prevRevenue = prevPayments.stream()
+                    .filter(p -> "SUCCESS".equalsIgnoreCase(p.getStatus()) && p.getAmount() != null)
+                    .map(PaymentTransaction::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            if (prevRevenue.compareTo(BigDecimal.ZERO) > 0) {
+                revenueGrowthRate = totalRevenue.subtract(prevRevenue)
+                        .divide(prevRevenue, 4, java.math.RoundingMode.HALF_UP)
+                        .multiply(BigDecimal.valueOf(100))
+                        .doubleValue();
+            } else {
+                revenueGrowthRate = totalRevenue.compareTo(BigDecimal.ZERO) > 0 ? 100.0 : 0.0;
+            }
+
+            // Tính tăng trưởng đăng ký VIP so với kỳ trước
+            long prevSubs = userSubscriptionRepository.countByStatusAndCreatedAtBetween("ACTIVE", prevStart, currentStart);
+            if (prevSubs > 0) {
+                subscriptionsGrowthRate = ((double) (activeSubs - prevSubs) / prevSubs) * 100.0;
+            } else {
+                subscriptionsGrowthRate = activeSubs > 0 ? 100.0 : 0.0;
+            }
+        }
 
         return VipPlanDto.OverviewStats.builder()
                 .totalPlans(totalPlans)
@@ -301,7 +365,14 @@ public class AdminSubscriptionService {
                 .pendingSubscriptions(pendingSubs)
                 .totalRevenue(totalRevenue)
                 .totalTransactions(payments.size())
+                .revenueGrowthRate(revenueGrowthRate)
+                .subscriptionsGrowthRate(subscriptionsGrowthRate)
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public VipPlanDto.OverviewStats getOverviewStats() {
+        return getOverviewStats(null);
     }
 }
 
