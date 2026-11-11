@@ -7,3 +7,12 @@ ai-service/app/__pycache__/
 
 # Frontend
 frontend/.env
+
+# Office / Excel temporary lock files
+~$*
+*.tmp
+
+# Test exports (khong push len git theo yeu cau nhom truong)
+testcases_tu_api.tsv
+testing/*.tsv
+testing/Test_viewpoint_updated.xlsx
