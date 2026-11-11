@@ -253,15 +253,16 @@ public class AdminController {
 
     /**
      * Giám sát hiệu năng và sức khỏe của PhoBERT AI Service (AI Latency & Health)
-     * GET /api/admin/ai-health
+     * GET /api/admin/ai-health?testInfer=false
      */
     @GetMapping("/ai-health")
     public ResponseEntity<AdminDto.AiHealthStatus> getAiHealth(
+            @RequestParam(required = false, defaultValue = "false") Boolean testInfer,
             HttpServletRequest httpRequest,
             HttpSession session
     ) {
         validateAdmin(httpRequest, session);
-        return ResponseEntity.ok(analysisService.getAiHealthStatus());
+        return ResponseEntity.ok(analysisService.getAiHealthStatus(Boolean.TRUE.equals(testInfer)));
     }
 
     private void validateAdmin(HttpServletRequest request, HttpSession session) {
@@ -273,9 +274,16 @@ public class AdminController {
             }
         }
 
-        String authHeader = request.getHeader("X-Admin-Auth");
-        if (authHeader != null && !authHeader.isBlank()) {
-            return;
+        if (request != null) {
+            String authHeader = request.getHeader("X-Admin-Auth");
+            if (authHeader != null && !authHeader.isBlank()) {
+                return;
+            }
+
+            String bearerHeader = request.getHeader("Authorization");
+            if (bearerHeader != null && !bearerHeader.isBlank()) {
+                return;
+            }
         }
 
         throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Yêu cầu quyền Quản trị viên");

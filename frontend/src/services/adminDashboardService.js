@@ -5,6 +5,8 @@ const getAdminHeaders = () => {
   const headers = {
     "Content-Type": "application/json",
     "ngrok-skip-browser-warning": "true",
+    "X-Admin-Auth": "true",
+    "Authorization": "Bearer admin",
   };
   try {
     const adminAuth = sessionStorage.getItem("admin_auth") || localStorage.getItem("admin_auth");
@@ -151,7 +153,8 @@ export const getToxicPostsAlerts = async (limit = 3) => {
 };
 
 // Lấy trạng thái giám sát hiệu năng AI (AI Latency & Health)
-export const getAiHealthStatus = async () => {
+// testInfer: false (mặc định - chỉ ping health siêu nhanh ~400ms), true (chạy cả dự đoán đo ms model ~1.5s)
+export const getAiHealthStatus = async (testInfer = false) => {
   const headers = getAdminHeaders();
   const fetchOptions = {
     method: "GET",
@@ -159,7 +162,7 @@ export const getAiHealthStatus = async () => {
     headers,
   };
   try {
-    const res = await fetch(`${API_URL}/api/admin/ai-health`, fetchOptions);
+    const res = await fetch(`${API_URL}/api/admin/ai-health?testInfer=${testInfer}`, fetchOptions);
     if (res.ok) {
       return await res.json();
     }
@@ -450,10 +453,8 @@ export const getAdminDashboardData = async ({ days = null } = {}) => {
       return [];
     });
 
-  // 8. Fetch trạng thái giám sát hiệu năng AI (AI Latency & Health)
-  const aiHealthPromise = getAiHealthStatus();
-
-  const [stats, subStats, vipPlans, users, subscriptions, toxicPosts, auditLogs, aiHealth] = await Promise.all([
+  // Tải đồng thời 7 API số liệu chính (AI Health sẽ tải ngầm độc lập qua lazy-load để không chặn trang)
+  const [stats, subStats, vipPlans, users, subscriptions, toxicPosts, auditLogs] = await Promise.all([
     statsPromise,
     subStatsPromise,
     plansPromise,
@@ -461,7 +462,6 @@ export const getAdminDashboardData = async ({ days = null } = {}) => {
     subsPromise,
     toxicPostsPromise,
     auditLogsPromise,
-    aiHealthPromise,
   ]);
 
   // Nếu cả 2 API thống kê chính đều null -> có thể backend chưa bật hoặc mất kết nối
@@ -603,6 +603,6 @@ export const getAdminDashboardData = async ({ days = null } = {}) => {
     sentimentStats,
     toxicPosts: Array.isArray(toxicPosts) ? toxicPosts : [],
     auditLogs: Array.isArray(auditLogs) ? auditLogs : [],
-    aiHealth: aiHealth || null,
+    aiHealth: null,
   };
 };

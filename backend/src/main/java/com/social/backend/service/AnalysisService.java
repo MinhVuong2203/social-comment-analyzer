@@ -485,8 +485,9 @@ public class AnalysisService {
     /**
      * Giám sát hiệu năng và sức khỏe của PhoBERT AI Service
      * Đo lường thời gian ping healthcheck và thời gian suy luận thực tế (Inference Latency)
+     * @param testInfer Nếu true sẽ thực hiện thêm 1 lượt suy luận mẫu để đo tốc độ mô hình
      */
-    public AdminDto.AiHealthStatus getAiHealthStatus() {
+    public AdminDto.AiHealthStatus getAiHealthStatus(boolean testInfer) {
         long totalPredictions = predictionRepository.count();
         long pingStart = System.currentTimeMillis();
 
@@ -495,14 +496,16 @@ public class AnalysisService {
             Map<String, Object> aiHealth = aiServiceClient.health();
             long latencyMs = System.currentTimeMillis() - pingStart;
 
-            // 2. Đo thời gian suy luận thực tế trên 1 câu mẫu
+            // 2. Đo thời gian suy luận thực tế trên 1 câu mẫu nếu testInfer=true
             Long inferenceLatencyMs = null;
-            try {
-                long inferStart = System.currentTimeMillis();
-                aiServiceClient.predict("Bình luận kiểm tra hiệu năng hệ thống");
-                inferenceLatencyMs = System.currentTimeMillis() - inferStart;
-            } catch (Exception ex) {
-                // Nếu suy luận mẫu gặp lỗi nhẹ, vẫn giữ kết quả healthcheck
+            if (testInfer) {
+                try {
+                    long inferStart = System.currentTimeMillis();
+                    aiServiceClient.predict("Bình luận kiểm tra hiệu năng hệ thống");
+                    inferenceLatencyMs = System.currentTimeMillis() - inferStart;
+                } catch (Exception ex) {
+                    // Nếu suy luận mẫu gặp lỗi nhẹ, vẫn giữ kết quả healthcheck
+                }
             }
 
             String status = latencyMs > 1000 ? "DEGRADED" : "ONLINE";

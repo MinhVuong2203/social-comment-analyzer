@@ -154,10 +154,10 @@ export default function AdminDashboardPage() {
 
   const activeAiHealth = liveAiHealth || dashboardData.aiHealth;
 
-  const handlePingAi = async () => {
+  const handlePingAi = async (testInfer = true) => {
     setIsPingingAi(true);
     try {
-      const res = await getAiHealthStatus();
+      const res = await getAiHealthStatus(testInfer);
       if (res) {
         setLiveAiHealth(res);
       }
@@ -167,6 +167,26 @@ export default function AdminDashboardPage() {
       setIsPingingAi(false);
     }
   };
+
+  // Tự động kiểm tra kết nối AI ngầm (Background Lazy Load - không chặn tốc độ tải Dashboard)
+  useEffect(() => {
+    let isMounted = true;
+    const loadAiHealthInBackground = async () => {
+      setIsPingingAi(true);
+      try {
+        const res = await getAiHealthStatus(false);
+        if (isMounted && res) {
+          setLiveAiHealth(res);
+        }
+      } catch (e) {
+        console.warn("Lỗi tải ngầm AI Health:", e);
+      } finally {
+        if (isMounted) setIsPingingAi(false);
+      }
+    };
+    loadAiHealthInBackground();
+    return () => { isMounted = false; };
+  }, []);
 
   // State Modal xem toàn bộ 50 nhật ký hoạt động
   const [showAuditModal, setShowAuditModal] = useState(false);
@@ -931,7 +951,12 @@ export default function AdminDashboardPage() {
 
             <div className="flex items-center space-x-2">
               {/* Badge trạng thái */}
-              {activeAiHealth?.status === 'ONLINE' ? (
+              {isPingingAi && !activeAiHealth ? (
+                <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-['JetBrains_Mono'] font-medium bg-[#4cd7f6]/15 text-[#4cd7f6] border border-[#4cd7f6]/30">
+                  <RefreshCw size={9} className="animate-spin shrink-0 text-[#4cd7f6]" />
+                  <span>Đang kết nối...</span>
+                </span>
+              ) : activeAiHealth?.status === 'ONLINE' ? (
                 <span className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-['JetBrains_Mono'] font-medium bg-[#4edea3]/15 text-[#4edea3] border border-[#4edea3]/30">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse shrink-0" />
                   <span>Online</span>
@@ -948,12 +973,12 @@ export default function AdminDashboardPage() {
                 </span>
               )}
 
-              {/* Nút Ping kiểm tra tức thời */}
+              {/* Nút Ping kiểm tra tức thời (đo cả tốc độ PhoBERT) */}
               <button
-                onClick={handlePingAi}
+                onClick={() => handlePingAi(true)}
                 disabled={isPingingAi}
                 className="text-[10px] text-[#4cd7f6] hover:text-[#7ce5f8] hover:underline flex items-center space-x-1 cursor-pointer font-['JetBrains_Mono'] transition-colors disabled:opacity-50"
-                title="Gửi ping kiểm tra độ trễ AI Service theo thời gian thực"
+                title="Gửi ping kiểm tra độ trễ mạng và đo thời gian suy luận PhoBERT"
               >
                 <RefreshCw size={10} className={isPingingAi ? "animate-spin" : ""} />
                 <span>{isPingingAi ? "Đang ping..." : "Kiểm tra"}</span>
