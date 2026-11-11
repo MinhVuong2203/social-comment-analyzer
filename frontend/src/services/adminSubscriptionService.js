@@ -5,6 +5,7 @@ const API_URL = import.meta.env.VITE_API_URL || "https://provider-egging-stratus
 const getAdminHeaders = () => {
   const headers = {
     "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "true",
   };
   try {
     const adminAuth = sessionStorage.getItem("admin_auth") || localStorage.getItem("admin_auth");
