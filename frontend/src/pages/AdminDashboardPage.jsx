@@ -8,7 +8,11 @@ import {
   AlertCircle,
   PieChart,
   Filter,
-  RotateCcw
+  RotateCcw,
+  Flame,
+  ExternalLink,
+  ShieldCheck,
+  AlertTriangle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -108,6 +112,7 @@ export default function AdminDashboardPage() {
     planDistribution: [],
     planCount: 3,
     sentimentStats: null,
+    toxicPosts: [],
     isBackendConnected: false
   });
 
@@ -555,6 +560,126 @@ export default function AdminDashboardPage() {
               ))}
             </div>
           </div>
+        </div>
+
+        {/* Khối Cảnh báo bài viết nóng (Top Toxic Posts - giới hạn tối đa 3 bài) */}
+        <div className="bg-[#1a1a2e] border border-white/10 rounded-lg p-2.5 space-y-2.5">
+          <div className="flex items-center justify-between border-b border-white/10 pb-1.5 flex-wrap gap-1.5">
+            <div className="flex items-center space-x-1.5">
+              <Flame size={14} className="text-[#ff5449] animate-pulse" />
+              <span className="font-semibold text-[11px] text-[#f1f5f9]">
+                Cảnh báo bài viết nóng
+              </span>
+              <span className="text-[9px] px-1.5 py-0.2 rounded font-['JetBrains_Mono'] bg-[#ff5449]/15 text-[#ffb4ab] border border-[#ff5449]/30">
+                Top Độc hại
+              </span>
+            </div>
+            <span className="text-[10px] text-[#94a3b8] font-['JetBrains_Mono']">
+              Top {dashboardData.toxicPosts?.slice(0, 3).length || 0} bài viết cần chú ý
+            </span>
+          </div>
+
+          {dashboardData.toxicPosts && dashboardData.toxicPosts.length > 0 ? (
+            <div className="space-y-2">
+              {dashboardData.toxicPosts.slice(0, 3).map((post) => {
+                const isCritical = post.alertLevel === 'CRITICAL';
+                const isHigh = post.alertLevel === 'HIGH';
+                const badgeColor = isCritical
+                  ? 'bg-[#93000a]/40 text-[#ffb4ab] border-[#ffb4ab]/30'
+                  : isHigh
+                  ? 'bg-[#f59e0b]/20 text-[#f59e0b] border-[#f59e0b]/30'
+                  : 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30';
+
+                const badgeText = isCritical
+                  ? `Nguy cơ cao (${post.toxicPercentage}%)`
+                  : isHigh
+                  ? `Cảnh báo (${post.toxicPercentage}%)`
+                  : `Cần theo dõi (${post.toxicPercentage}%)`;
+
+                return (
+                  <div
+                    key={post.id || post.threadsPostId}
+                    className="bg-[#121221] border border-white/5 hover:border-white/15 rounded-lg p-2 transition space-y-1.5"
+                  >
+                    {/* Hàng trên: Tác giả, Thời gian & Badge cảnh báo */}
+                    <div className="flex items-center justify-between text-[10px]">
+                      <div className="flex items-center space-x-1.5 truncate">
+                        <span className="font-medium text-white truncate">
+                          @{post.authorUsername || 'threads_user'}
+                        </span>
+                        <span className="text-[9px] text-[#94a3b8]">
+                          • ID: {post.threadsPostId?.slice(0, 10)}...
+                        </span>
+                      </div>
+                      <span className={`text-[9px] font-['JetBrains_Mono'] px-1.5 py-0.5 rounded font-semibold border ${badgeColor}`}>
+                        {badgeText}
+                      </span>
+                    </div>
+
+                    {/* Nội dung bài viết tóm tắt nếu có */}
+                    {post.postText ? (
+                      <div className="text-[11px] text-[#cbd5e1] line-clamp-2 leading-relaxed bg-black/20 p-1.5 rounded border border-white/5">
+                        "{post.postText}"
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-[#64748b] italic">
+                        Bài viết Threads #{post.threadsPostId}
+                      </div>
+                    )}
+
+                    {/* Thống kê chi tiết & Thanh tỷ lệ */}
+                    <div className="space-y-1 pt-0.5">
+                      <div className="flex items-center justify-between text-[9px] text-[#94a3b8] font-['JetBrains_Mono']">
+                        <span>
+                          <strong className="text-white">{post.totalComments}</strong> bình luận
+                          {' • '}
+                          <strong className="text-[#ff5449]">{post.toxicCount}</strong> độc hại
+                          {post.hateCount > 0 && <span> (Thù ghét: <strong className="text-[#ff5449]">{post.hateCount}</strong>)</span>}
+                          {post.offensiveCount > 0 && <span> (Xúc phạm: <strong className="text-[#f59e0b]">{post.offensiveCount}</strong>)</span>}
+                        </span>
+
+                        {post.permalink && (
+                          <a
+                            href={post.permalink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#4cd7f6] hover:underline flex items-center space-x-0.5"
+                          >
+                            <span>Xem Threads</span>
+                            <ExternalLink size={9} />
+                          </a>
+                        )}
+                      </div>
+
+                      {/* Mini bar độc hại vs lành tính */}
+                      <div className="w-full bg-[#0d0d14] h-1.5 rounded-full overflow-hidden flex">
+                        <div
+                          className="bg-[#ff5449] h-full transition-all duration-500"
+                          style={{ width: `${Math.min(100, post.toxicPercentage)}%` }}
+                          title={`Độc hại: ${post.toxicPercentage}%`}
+                        />
+                        <div
+                          className="bg-[#4edea3] h-full transition-all duration-500"
+                          style={{ width: `${Math.max(0, 100 - post.toxicPercentage)}%` }}
+                          title={`Lành tính: ${100 - post.toxicPercentage}%`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="bg-[#121221] border border-white/5 rounded-lg p-4 text-center space-y-1.5">
+              <ShieldCheck size={24} className="text-[#4edea3] mx-auto" />
+              <div className="text-[11px] font-semibold text-white">
+                Hệ thống an toàn
+              </div>
+              <div className="text-[10px] text-[#94a3b8]">
+                Chưa ghi nhận bài viết nào có tỷ lệ bình luận độc hại vượt ngưỡng cảnh báo.
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 2 Navigation Cards */}

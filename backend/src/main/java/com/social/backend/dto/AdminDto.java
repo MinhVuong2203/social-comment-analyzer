@@ -42,6 +42,24 @@ public class AdminDto {
             Long newUsersCount
     ) {}
 
+    public record ToxicPostAlert(
+            Long id,
+            String threadsPostId,
+            String threadsUserId,
+            String authorUsername,
+            String postText,
+            String permalink,
+            int totalComments,
+            int toxicCount,
+            int nonToxicCount,
+            int hateCount,
+            int offensiveCount,
+            int negativeCount,
+            int toxicPercentage,
+            String alertLevel,
+            LocalDateTime createdAt
+    ) {}
+
     public record StatusUpdateRequest(
             String status
     ) {}

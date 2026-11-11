@@ -412,4 +412,73 @@ public class AnalysisService {
     public AdminDto.SystemStats getAdminStatistics() {
         return getAdminStatistics(null);
     }
+
+    /**
+     * Danh sách bài viết nóng có lượng bình luận độc hại / thù ghét cao nhất
+     */
+    public List<AdminDto.ToxicPostAlert> getTopToxicPosts(int limit) {
+        List<AnalysisResult> results = analysisResultRepository.findAll();
+
+        return results.stream()
+                .filter(ar -> ar.getTotalComments() != null && ar.getTotalComments() > 0)
+                .sorted((a, b) -> {
+                    int toxicA = a.getToxicCount() != null ? a.getToxicCount() : 0;
+                    int toxicB = b.getToxicCount() != null ? b.getToxicCount() : 0;
+                    if (toxicB != toxicA) return Integer.compare(toxicB, toxicA);
+                    int totA = a.getTotalComments() != null ? a.getTotalComments() : 1;
+                    int totB = b.getTotalComments() != null ? b.getTotalComments() : 1;
+                    double rateA = (double) toxicA / totA;
+                    double rateB = (double) toxicB / totB;
+                    return Double.compare(rateB, rateA);
+                })
+                .limit(limit > 0 ? limit : 5)
+                .map(ar -> {
+                    String postText = "";
+                    String permalink = "";
+                    Optional<Post> postOpt = postRepository.findByThreadsPostId(ar.getThreadsPostId());
+                    if (postOpt.isPresent()) {
+                        postText = postOpt.get().getText() != null ? postOpt.get().getText() : "";
+                        permalink = postOpt.get().getPermalink() != null ? postOpt.get().getPermalink() : "";
+                    }
+
+                    String authorUsername = "";
+                    if (ar.getThreadsUserId() != null) {
+                        authorUsername = userRepository.findByThreadsUserId(ar.getThreadsUserId())
+                                .map(u -> u.getUsername() != null ? u.getUsername() : u.getName())
+                                .orElse(ar.getThreadsUserId());
+                    }
+
+                    int total = ar.getTotalComments() != null ? ar.getTotalComments() : 0;
+                    int toxic = ar.getToxicCount() != null ? ar.getToxicCount() : 0;
+                    int nonToxic = ar.getNonToxicCount() != null ? ar.getNonToxicCount() : 0;
+                    int hate = ar.getHateCount() != null ? ar.getHateCount() : 0;
+                    int offensive = ar.getOffensiveCount() != null ? ar.getOffensiveCount() : 0;
+                    int negative = ar.getNegativeCount() != null ? ar.getNegativeCount() : 0;
+                    int pct = total > 0 ? (int) Math.round((toxic * 100.0) / total) : 0;
+
+                    String level = "LOW";
+                    if (pct >= 60 || toxic >= 10) level = "CRITICAL";
+                    else if (pct >= 35 || toxic >= 5) level = "HIGH";
+                    else if (toxic > 0) level = "MEDIUM";
+
+                    return new AdminDto.ToxicPostAlert(
+                            ar.getId(),
+                            ar.getThreadsPostId(),
+                            ar.getThreadsUserId(),
+                            authorUsername,
+                            postText,
+                            permalink,
+                            total,
+                            toxic,
+                            nonToxic,
+                            hate,
+                            offensive,
+                            negative,
+                            pct,
+                            level,
+                            ar.getCreatedAt()
+                    );
+                })
+                .toList();
+    }
 }

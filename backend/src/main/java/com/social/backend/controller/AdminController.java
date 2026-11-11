@@ -197,6 +197,20 @@ public class AdminController {
         return ResponseEntity.ok(analysisService.getAdminStatistics(days));
     }
 
+    /**
+     * Danh sách bài viết nóng có lượng bình luận độc hại / thù ghét cao nhất (Top 3)
+     * GET /api/admin/toxic-posts-alerts?limit=3
+     */
+    @GetMapping("/toxic-posts-alerts")
+    public ResponseEntity<List<AdminDto.ToxicPostAlert>> getTopToxicPosts(
+            @RequestParam(required = false, defaultValue = "3") Integer limit,
+            HttpServletRequest httpRequest,
+            HttpSession session
+    ) {
+        validateAdmin(httpRequest, session);
+        return ResponseEntity.ok(analysisService.getTopToxicPosts(limit));
+    }
+
     private void validateAdmin(HttpServletRequest request, HttpSession session) {
         if (session != null) {
             boolean hasAdminSession = Boolean.TRUE.equals(session.getAttribute("admin_logged_in"))

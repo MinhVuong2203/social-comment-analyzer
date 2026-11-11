@@ -106,6 +106,24 @@ export const getChartAnalysisStats = async (days = null) => {
   }
 };
 
+// Lấy danh sách bài viết nóng có lượng bình luận độc hại cao nhất (Top 3)
+export const getToxicPostsAlerts = async (limit = 3) => {
+  const headers = getAdminHeaders();
+  const fetchOptions = {
+    method: "GET",
+    credentials: "include",
+    headers,
+  };
+  try {
+    const res = await fetch(`${API_URL}/api/admin/toxic-posts-alerts?limit=${limit}`, fetchOptions);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch (err) {
+    console.warn("Lỗi lấy danh sách bài viết nóng:", err.message);
+    return [];
+  }
+};
+
 // Lấy toàn bộ số liệu cho Admin Dashboard (hỗ trợ lọc thời gian thực tế từ backend)
 export const getAdminDashboardData = async ({ days = null } = {}) => {
   const headers = getAdminHeaders();
@@ -157,12 +175,21 @@ export const getAdminDashboardData = async ({ days = null } = {}) => {
       return [];
     });
 
-  const [stats, subStats, vipPlans, users, subscriptions] = await Promise.all([
+  // 6. Fetch danh sách bài viết nóng có lượng bình luận độc hại cao (Top 3)
+  const toxicPostsPromise = fetch(`${API_URL}/api/admin/toxic-posts-alerts?limit=3`, fetchOptions)
+    .then(async (res) => (res.ok ? await res.json() : []))
+    .catch((err) => {
+      console.warn("Lỗi lấy /api/admin/toxic-posts-alerts:", err.message);
+      return [];
+    });
+
+  const [stats, subStats, vipPlans, users, subscriptions, toxicPosts] = await Promise.all([
     statsPromise,
     subStatsPromise,
     plansPromise,
     usersPromise,
     subsPromise,
+    toxicPostsPromise,
   ]);
 
   // Nếu cả 2 API thống kê chính đều null -> có thể backend chưa bật hoặc mất kết nối
@@ -302,5 +329,6 @@ export const getAdminDashboardData = async ({ days = null } = {}) => {
     planDistribution,
     planCount: Array.isArray(vipPlans) && vipPlans.length > 0 ? vipPlans.length : 3,
     sentimentStats,
+    toxicPosts: Array.isArray(toxicPosts) ? toxicPosts : [],
   };
 };
