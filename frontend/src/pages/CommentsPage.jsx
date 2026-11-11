@@ -429,9 +429,9 @@ export default function CommentsPage() {
           rawPrediction: pred,
         } : r));
 
-        setStatusMsg(`✓ Đã phân tích xong: [Toxicity: ${toxLabel} (${toxVal}%), Sắc thái: ${sentLabel.toUpperCase()}]`);
+        setStatusMsg(`Đã phân tích xong: [Toxicity: ${toxLabel} (${toxVal}%), Sắc thái: ${sentLabel.toUpperCase()}]`);
       } else {
-        setStatusMsg('⚠️ Không thể phân tích: Không kết nối được tới PhoBERT AI Service (cổng 8000).');
+        setStatusMsg('Không thể phân tích: Không kết nối được tới PhoBERT AI Service (cổng 8000).');
       }
     } catch (e) {
       console.error(e);
@@ -452,7 +452,7 @@ export default function CommentsPage() {
             <h2 className="ct-title">
               Bình luận <span className="ct-live-badge">{replies.length} Tổng</span>
             </h2>
-            <span className="ct-model-badge">● PhoBERT v2.1</span>
+            <span className="ct-model-badge">PhoBERT v2.1</span>
           </div>
 
           {/* ⚡ NÚT PHÂN TÍCH TẤT CẢ BÌNH LUẬN & REPLIES ⚡ */}
@@ -471,7 +471,7 @@ export default function CommentsPage() {
                 </>
               ) : (
                 <>
-                  <span>⚡ Phân tích tất cả ({replies.length})</span>
+                  <span>Phân tích tất cả ({replies.length})</span>
                 </>
               )}
             </button>
@@ -485,7 +485,7 @@ export default function CommentsPage() {
         {/* Thông báo tiến độ / trạng thái phân tích */}
         {statusMsg && (
           <div className="ct-status-toast">
-            <span>ℹ</span>
+
             <span>{statusMsg}</span>
           </div>
         )}
@@ -529,7 +529,7 @@ export default function CommentsPage() {
           disabled={isLoadingComments}
           title="Đồng bộ lại bình luận từ Threads"
         >
-          {isLoadingComments ? <span className="ct-spinner" /> : '↻ Đồng bộ'}
+          {isLoadingComments ? <span className="ct-spinner" /> : 'Đồng bộ'}
         </button>
       </div>
 
@@ -537,10 +537,11 @@ export default function CommentsPage() {
       {selectedPost && (
         <div className="ct-selected-post-card">
           <div className="ct-selected-post-header">
+            <span className="ct-selected-post-tag">BÀI VIẾT GỐC</span>
             <span className="ct-post-author">{selectedPost.username}</span>
             <span className="ct-post-time">• {selectedPost.time}</span>
             {selectedPost.analyzed && (
-              <span className="ct-post-analyzed-badge">✓ Đã phân tích</span>
+              <span className="ct-post-analyzed-badge">Đã phân tích</span>
             )}
           </div>
           <p className="ct-selected-post-text">{selectedPost.text}</p>
@@ -550,7 +551,7 @@ export default function CommentsPage() {
       {/* Search */}
       <div className="ct-search-row">
         <div className="ct-search-wrap">
-          <span className="ct-search-icon">🔍</span>
+          <svg className="ct-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input
             className="ct-search"
             placeholder="Tìm kiếm bình luận hoặc @tên người dùng..."
@@ -565,7 +566,7 @@ export default function CommentsPage() {
       <div className="ct-filter-bar">
         <span className="ct-filter-label">BỘ LỌC PHÂN TÍCH</span>
         <div className="ct-sort-wrap" onClick={() => setShowSort(s => !s)}>
-          <span className="ct-sort-btn">↕ {sort}</span>
+          <span className="ct-sort-btn">Sắp xếp: {sort}</span>
           {showSortMenu && (
             <div className="ct-sort-menu">
               {SORT_OPTIONS.map(o => (
@@ -599,7 +600,7 @@ export default function CommentsPage() {
       {/* Reply list or Empty state */}
       {replies.length === 0 ? (
         <div className="ct-empty-comments">
-          <span className="ct-empty-icon">💬</span>
+          <div className="ct-empty-badge">Trống</div>
           <h4 className="ct-empty-title">Chưa có bình luận nào</h4>
           <p className="ct-empty-desc">
             Bài viết này trên Threads chưa nhận được phản hồi nào từ cộng đồng. Hãy đăng thử một bình luận trên Threads để phân tích!
@@ -618,7 +619,7 @@ export default function CommentsPage() {
         </div>
       ) : displayItems.length === 0 ? (
         <div className="ct-empty-comments" style={{ padding: '24px 16px' }}>
-          <span className="ct-empty-icon">🔍</span>
+          <div className="ct-empty-badge">Không có kết quả</div>
           <h4 className="ct-empty-title">Không tìm thấy kết quả phù hợp</h4>
           <p className="ct-empty-desc">
             Không có bình luận hay câu trả lời nào khớp với từ khóa hoặc bộ lọc đã chọn.
@@ -660,7 +661,7 @@ export default function CommentsPage() {
             onClick={handleAnalyzeAll}
             disabled={isAnalyzing}
           >
-            {isAnalyzing ? "Đang xử lý..." : "⚡ Phân tích ngay"}
+            {isAnalyzing ? "Đang xử lý..." : "Phân tích ngay"}
           </button>
           <button className="ct-close-btn" onClick={() => setShowNew(false)}>✕</button>
         </div>
@@ -669,13 +670,13 @@ export default function CommentsPage() {
       {/* Stats */}
       <div className="ct-stats-row">
         {stats.unprocCount > 0 && (
-          <span className="ct-stat" style={{ color: '#facc15' }}>⏳ {stats.unprocCount} Chưa phân tích</span>
+          <span className="ct-stat" style={{ color: '#facc15' }}>Chưa phân tích: {stats.unprocCount}</span>
         )}
-        <span className="ct-stat" style={{ color: '#38bdf8' }}>💬 {totalTopLevel} Bình luận</span>
-        <span className="ct-stat" style={{ color: '#a78bfa' }}>↪ {totalChildReplies} Phản hồi</span>
-        <span className="ct-stat ct-stat--pos">● {stats.posCount} Tích cực</span>
-        <span className="ct-stat ct-stat--neu">● {stats.neuCount} Trung tính</span>
-        <span className="ct-stat ct-stat--neg">● {stats.toxCount} Độc hại (Toxic)</span>
+        <span className="ct-stat" style={{ color: '#38bdf8' }}>Bình luận: {totalTopLevel}</span>
+        <span className="ct-stat" style={{ color: '#a78bfa' }}>Phản hồi: {totalChildReplies}</span>
+        <span className="ct-stat ct-stat--pos">Tích cực: {stats.posCount}</span>
+        <span className="ct-stat ct-stat--neu">Trung tính: {stats.neuCount}</span>
+        <span className="ct-stat ct-stat--neg">Độc hại: {stats.toxCount}</span>
       </div>
 
     </div>
