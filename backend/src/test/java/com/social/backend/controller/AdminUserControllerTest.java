@@ -5,6 +5,9 @@ import com.social.backend.dto.AdminDto;
 import com.social.backend.entity.User;
 import com.social.backend.service.AnalysisService;
 import com.social.backend.service.UserService;
+import com.social.backend.service.AdminAuditLogService;
+import com.social.backend.service.AnalysisService;
+import com.social.backend.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +37,9 @@ class AdminUserControllerTest {
 
     @Mock
     private UserService userService;
+
+    @Mock
+    private AdminAuditLogService auditLogService;
 
     @Mock
     private AnalysisService analysisService;
