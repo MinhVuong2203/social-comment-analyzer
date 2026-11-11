@@ -9,6 +9,7 @@ import com.social.backend.dto.StatisticsResponse.TrendPoint;
 import com.social.backend.service.StatisticsExportService;
 import com.social.backend.service.StatisticsExportService.Format;
 import com.social.backend.service.StatisticsService;
+import com.social.backend.service.UserLimitService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -57,6 +59,9 @@ class StatisticsControllerTest {
     @Mock
     private StatisticsExportService statisticsExportService;
 
+    @Mock
+    private UserLimitService userLimitService;
+
     @InjectMocks
     private StatisticsController statisticsController;
 
@@ -68,6 +73,7 @@ class StatisticsControllerTest {
         userSession = new MockHttpSession();
         userSession.setAttribute("threads_user_id", "u1");
         userSession.setAttribute("threads_access_token", "token");
+        lenient().when(userLimitService.canExport(any())).thenReturn(true);
     }
 
     private static StatisticsResponse sampleResponse(boolean repliesSynced) {

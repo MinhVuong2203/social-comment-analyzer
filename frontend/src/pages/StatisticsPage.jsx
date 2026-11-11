@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import '../assets/styles/StatisticsPage.css';
 import { apiService } from '../services/apiService';
+import { useVipStatus } from '../hooks/useVipStatus';
+import { useNavigate } from 'react-router-dom';
 
 const SENTIMENT_COLORS = {
   POSITIVE: '#10b981',
@@ -301,6 +303,8 @@ function StatisticsContent({ stats }) {
 }
 
 export default function StatisticsPage() {
+  const navigate = useNavigate();
+  const vipStatus = useVipStatus();
   const [posts, setPosts] = useState([]);
   const [postsLoading, setPostsLoading] = useState(true);
   const [selectedPostId, setSelectedPostId] = useState(null);
@@ -360,10 +364,17 @@ export default function StatisticsPage() {
   const handleAnalyze = async () => {
     setAnalyzing(true);
     setAnalyzeError(null);
+    // Kiểm tra quota phân tích
+    if (!vipStatus.isVipOrAdmin && vipStatus.remainingAnalysis === 0) {
+      setAnalyzeError(`Bạn đã hết ${vipStatus.dailyAnalyzeLimit} lần phân tích trong ngày hôm nay. Nâng cấp VIP để phân tích không giới hạn.`);
+      setAnalyzing(false);
+      return;
+    }
     try {
       await apiService.analyzePost(selectedPostId);
       const fresh = await apiService.getPostStatistics(selectedPostId);
       setResult({ postId: selectedPostId, stats: fresh });
+      vipStatus.refresh();
     } catch (err) {
       setAnalyzeError(`${err.message}. Hãy chắc chắn AI Service đang chạy.`);
     } finally {
@@ -373,6 +384,11 @@ export default function StatisticsPage() {
 
   const handleExport = async () => {
     if (!selectedPostId) return;
+    // Kiểm tra quota xuất báo cáo
+    if (!vipStatus.isVipOrAdmin && vipStatus.remainingExports === 0) {
+      setExportError(`Bạn đã hết ${vipStatus.dailyExportLimit} lần xuất báo cáo trong ngày hôm nay. Nâng cấp VIP để xuất không giới hạn.`);
+      return;
+    }
     setExporting(true);
     setExportError(null);
     try {
@@ -385,8 +401,13 @@ export default function StatisticsPage() {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
+      vipStatus.refresh();
     } catch (err) {
-      setExportError(err.message);
+      if (err.message && err.message.includes('429')) {
+        setExportError(`Bạn đã đạt giới hạn ${vipStatus.dailyExportLimit} lần xuất báo cáo trong ngày. Nâng cấp VIP để xuất không giới hạn.`);
+      } else {
+        setExportError(err.message);
+      }
     } finally {
       setExporting(false);
     }
@@ -394,6 +415,46 @@ export default function StatisticsPage() {
 
   return (
     <div className="st-wrap">
+
+      {/* ── Quota Banner (non-VIP) ── */}
+      {!vipStatus.loading && !vipStatus.isVipOrAdmin && (
+        <div style={{
+          padding: '7px 10px',
+          background: vipStatus.remainingExports === 0
+            ? 'rgba(239,68,68,0.08)'
+            : 'rgba(245,158,11,0.07)',
+          border: `1px solid ${vipStatus.remainingExports === 0
+            ? 'rgba(239,68,68,0.25)'
+            : 'rgba(245,158,11,0.2)'}`,
+          borderRadius: 7,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          flexWrap: 'wrap',
+          marginBottom: 2,
+        }}>
+          <span style={{ fontSize: 10, color: vipStatus.remainingExports === 0 ? '#f87171' : '#fbbf24' }}>
+            Lượt xuất báo cáo: <strong>{vipStatus.remainingExports}/{vipStatus.dailyExportLimit}</strong> còn lại hôm nay.
+            {' '}<span style={{ color: '#94a3b8' }}>Nâng cấp VIP để xuất không giới hạn.</span>
+          </span>
+          <button
+            onClick={() => navigate('/profile')}
+            style={{
+              padding: '2px 8px',
+              background: 'rgba(255,215,0,0.1)',
+              border: '1px solid rgba(255,215,0,0.25)',
+              color: '#ffd700',
+              borderRadius: 5,
+              fontSize: 9.5,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Nâng cấp VIP
+          </button>
+        </div>
+      )}
 
       {/* ── Hero card ── */}
       <div className="st-hero">

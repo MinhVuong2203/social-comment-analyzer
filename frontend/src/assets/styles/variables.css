@@ -45,3 +45,63 @@
   --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.15);
 }
+
+/* ============================= */
+/* LIGHT THEME                   */
+/* ============================= */
+[data-theme="light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #f1f5f9;
+  --bg-panel: #e2e8f0;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f8fafc;
+  --bg-input: #f1f5f9;
+
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-default: rgba(0, 0, 0, 0.12);
+  --border-active: rgba(139, 92, 246, 0.4);
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --text-accent: #7c3aed;
+
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.08);
+  --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.08);
+}
+
+[data-theme="light"] body {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .header-container {
+  background: rgba(248, 250, 252, 0.96);
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .tab-btn {
+  color: #64748b;
+}
+[data-theme="light"] .tab-btn:hover {
+  color: #334155;
+}
+[data-theme="light"] .tab-btn.active {
+  color: #0f172a;
+}
+
+[data-theme="light"] .user-profile-badge {
+  background: rgba(100, 100, 200, 0.08);
+  border-color: rgba(100, 100, 200, 0.2);
+  color: #0f172a;
+}
+
+[data-theme="light"] .user-badge-name {
+  color: #0f172a;
+}
+
+[data-theme="light"] .btn-logout {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+

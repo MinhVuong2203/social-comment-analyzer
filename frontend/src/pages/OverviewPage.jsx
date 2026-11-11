@@ -9,10 +9,12 @@ import QuickActions from '../components/overview/QuickActions';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/apiService';
 import { useAuth } from '../context/AuthContext';
+import { useVipStatus } from '../hooks/useVipStatus';
 
 export default function OverviewPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const vipStatus = useVipStatus();
 
   const [posts, setPosts] = useState([]);
   const [selectedPostId, setSelectedPostId] = useState(null);
@@ -70,14 +72,25 @@ export default function OverviewPage() {
       return;
     }
 
+    // Kiểm tra quota phía client trước (non-VIP)
+    if (!vipStatus.isVipOrAdmin && vipStatus.remainingAnalysis === 0) {
+      setErrorMsg(`Bạn đã dùng hết ${vipStatus.dailyAnalyzeLimit} lần phân tích trong ngày hôm nay. Nâng cấp VIP để phân tích không giới hạn.`);
+      return;
+    }
+
     try {
       setAnalyzing(true);
       setErrorMsg(null);
       const result = await apiService.analyzePost(selectedPostId);
       setPostAnalysis(result);
-      await Promise.all([loadPosts(), loadOverview()]);
+      await Promise.all([loadPosts(), loadOverview(), vipStatus.refresh()]);
     } catch (err) {
-      setErrorMsg(err.message || "Lỗi khi phân tích bài viết. Hãy chắc chắn AI Service và Backend đang chạy.");
+      // Xử lý lỗi 429 quota exceeded từ server
+      if (err.message && err.message.includes('429')) {
+        setErrorMsg(`Bạn đã đạt giới hạn ${vipStatus.dailyAnalyzeLimit} lần phân tích trong ngày. Nâng cấp VIP để phân tích không giới hạn.`);
+      } else {
+        setErrorMsg(err.message || "Lỗi khi phân tích bài viết. Hãy chắc chắn AI Service và Backend đang chạy.");
+      }
     } finally {
       setAnalyzing(false);
     }
@@ -137,8 +150,56 @@ export default function OverviewPage() {
     total: currentTotalReplies
   };
 
+  // Hiển thị quota banner cho non-VIP
+  const showQuotaBanner = !vipStatus.loading && !vipStatus.isVipOrAdmin;
+
   return (
     <div className="tab-tong-quan">
+      {/* Quota Banner */}
+      {showQuotaBanner && (
+        <div style={{
+          padding: '8px 12px',
+          background: vipStatus.remainingAnalysis === 0
+            ? 'rgba(239, 68, 68, 0.1)'
+            : 'rgba(245, 158, 11, 0.08)',
+          border: `1px solid ${vipStatus.remainingAnalysis === 0
+            ? 'rgba(239, 68, 68, 0.3)'
+            : 'rgba(245, 158, 11, 0.25)'}`,
+          borderRadius: 8,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          flexWrap: 'wrap',
+        }}>
+          <div style={{ fontSize: 10.5, color: vipStatus.remainingAnalysis === 0 ? '#f87171' : '#fbbf24' }}>
+            {vipStatus.remainingAnalysis === 0
+              ? `Hết lượt phân tích hôm nay (${vipStatus.dailyAnalyzeLimit}/${vipStatus.dailyAnalyzeLimit}).`
+              : `Lượt phân tích còn lại hôm nay: ${vipStatus.remainingAnalysis}/${vipStatus.dailyAnalyzeLimit}`}
+            {' '}
+            <span style={{ color: '#94a3b8' }}>
+              Nâng cấp VIP để phân tích không giới hạn.
+            </span>
+          </div>
+          <button
+            onClick={() => navigate('/profile')}
+            style={{
+              padding: '3px 10px',
+              background: 'rgba(255,215,0,0.12)',
+              border: '1px solid rgba(255,215,0,0.3)',
+              color: '#ffd700',
+              borderRadius: 6,
+              fontSize: 10,
+              fontWeight: 600,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Nâng cấp VIP
+          </button>
+        </div>
+      )}
+
       {errorMsg && (
         <div style={{
           padding: '8px 12px',
@@ -149,7 +210,7 @@ export default function OverviewPage() {
           fontSize: 11,
           lineHeight: 1.4
         }}>
-          ⚠️ {errorMsg}
+          {errorMsg}
         </div>
       )}
 
@@ -160,6 +221,7 @@ export default function OverviewPage() {
         onScan={handleScanPost}
         scanning={analyzing}
         username={user?.username}
+        canScan={vipStatus.isVipOrAdmin || vipStatus.remainingAnalysis > 0}
       />
 
       <SummaryCard stats={summaryStats} />

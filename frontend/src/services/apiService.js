@@ -116,6 +116,10 @@ export const apiService = {
             headers: defaultHeaders,
             credentials: "include",
         });
+        if (res.status === 429) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(body.message || "Bạn đã đạt giới hạn phân tích trong ngày. Nâng cấp VIP để phân tích không giới hạn.");
+        }
         if (!res.ok) throw new Error("Lỗi khi phân tích toàn bộ bài viết");
         return await res.json();
     },
@@ -165,6 +169,10 @@ export const apiService = {
                 credentials: "include",
             }
         );
+        if (res.status === 429) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(body.message || "Bạn đã đạt giới hạn xuất báo cáo trong ngày. Nâng cấp VIP để xuất không giới hạn.");
+        }
         if (!res.ok) throw new Error("Không thể xuất báo cáo");
         return await res.blob();
     },
