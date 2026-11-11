@@ -1,7 +1,9 @@
 package com.social.backend.controller;
 
 import com.social.backend.dto.AdminDto;
+import com.social.backend.entity.AdminAuditLog;
 import com.social.backend.entity.User;
+import com.social.backend.service.AdminAuditLogService;
 import com.social.backend.service.AnalysisService;
 import com.social.backend.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,6 +23,7 @@ public class AdminController {
 
     private final UserService userService;
     private final AnalysisService analysisService;
+    private final AdminAuditLogService auditLogService;
 
     @Value("${admin.username:admin}")
     private String configuredAdminUsername;
@@ -28,9 +31,10 @@ public class AdminController {
     @Value("${admin.password:admin123}")
     private String configuredAdminPassword;
 
-    public AdminController(UserService userService, AnalysisService analysisService) {
+    public AdminController(UserService userService, AnalysisService analysisService, AdminAuditLogService auditLogService) {
         this.userService = userService;
         this.analysisService = analysisService;
+        this.auditLogService = auditLogService;
     }
 
     /**
@@ -56,6 +60,8 @@ public class AdminController {
         session.setAttribute("admin_logged_in", true);
         session.setAttribute("admin_username", request.username());
         session.setAttribute("admin_role", "SUPER_ADMIN");
+
+        auditLogService.log(request.username(), "ADMIN_LOGIN", "AUTH", request.username(), "Đăng nhập thành công vào cổng quản trị viên");
 
         return ResponseEntity.ok(Map.of(
                 "success", true,
@@ -134,6 +140,21 @@ public class AdminController {
 
         try {
             User updated = userService.lockUser(id, duration, reason);
+            String adminUser = session != null && session.getAttribute("admin_username") != null 
+                    ? (String) session.getAttribute("admin_username") : "admin";
+            String target = updated.getUsername() != null ? updated.getUsername() : String.valueOf(updated.getId());
+
+            String durationLabel = switch (duration != null ? duration : "PERMANENT") {
+                case "1_DAY" -> "1 ngày";
+                case "7_DAYS" -> "7 ngày";
+                case "30_DAYS" -> "30 ngày";
+                case "PERMANENT" -> "Vĩnh viễn";
+                default -> duration;
+            };
+
+            String reasonText = (reason != null && !reason.trim().isEmpty()) ? ", Lý do: " + reason.trim() : "";
+            auditLogService.log(adminUser, "LOCK_USER", "USER", target,
+                    "Khóa tài khoản @" + target + " (Thời hạn: " + durationLabel + reasonText + ")");
             return ResponseEntity.ok(updated);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
@@ -153,6 +174,11 @@ public class AdminController {
         validateAdmin(httpRequest, session);
         try {
             User updated = userService.unlockUser(id);
+            String adminUser = session != null && session.getAttribute("admin_username") != null 
+                    ? (String) session.getAttribute("admin_username") : "admin";
+            String target = updated.getUsername() != null ? updated.getUsername() : String.valueOf(updated.getId());
+            auditLogService.log(adminUser, "UNLOCK_USER", "USER", target,
+                    "Mở khóa tài khoản @" + target);
             return ResponseEntity.ok(updated);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
@@ -184,13 +210,59 @@ public class AdminController {
     }
 
     /**
-     * Xem thống kê toàn hệ thống
-     * GET /api/admin/statistics
+     * Xem thống kê toàn hệ thống (hỗ trợ lọc thời gian theo số ngày)
+     * GET /api/admin/statistics?days=30
      */
     @GetMapping("/statistics")
-    public ResponseEntity<AdminDto.SystemStats> getAdminStatistics(HttpServletRequest httpRequest, HttpSession session) {
+    public ResponseEntity<AdminDto.SystemStats> getAdminStatistics(
+            @RequestParam(required = false) Integer days,
+            HttpServletRequest httpRequest,
+            HttpSession session
+    ) {
         validateAdmin(httpRequest, session);
-        return ResponseEntity.ok(analysisService.getAdminStatistics());
+        return ResponseEntity.ok(analysisService.getAdminStatistics(days));
+    }
+
+    /**
+     * Danh sách bài viết nóng có lượng bình luận độc hại / thù ghét cao nhất (Top 3)
+     * GET /api/admin/toxic-posts-alerts?limit=3
+     */
+    @GetMapping("/toxic-posts-alerts")
+    public ResponseEntity<List<AdminDto.ToxicPostAlert>> getTopToxicPosts(
+            @RequestParam(required = false, defaultValue = "3") Integer limit,
+            HttpServletRequest httpRequest,
+            HttpSession session
+    ) {
+        validateAdmin(httpRequest, session);
+        return ResponseEntity.ok(analysisService.getTopToxicPosts(limit));
+    }
+
+    /**
+     * Lấy danh sách nhật ký hoạt động quản trị gần nhất
+     * GET /api/admin/audit-logs?limit=5
+     */
+    @GetMapping("/audit-logs")
+    public ResponseEntity<List<AdminAuditLog>> getAdminAuditLogs(
+            @RequestParam(required = false, defaultValue = "5") Integer limit,
+            HttpServletRequest httpRequest,
+            HttpSession session
+    ) {
+        validateAdmin(httpRequest, session);
+        return ResponseEntity.ok(auditLogService.getRecentLogs(limit));
+    }
+
+    /**
+     * Giám sát hiệu năng và sức khỏe của PhoBERT AI Service (AI Latency & Health)
+     * GET /api/admin/ai-health?testInfer=false
+     */
+    @GetMapping("/ai-health")
+    public ResponseEntity<AdminDto.AiHealthStatus> getAiHealth(
+            @RequestParam(required = false, defaultValue = "false") Boolean testInfer,
+            HttpServletRequest httpRequest,
+            HttpSession session
+    ) {
+        validateAdmin(httpRequest, session);
+        return ResponseEntity.ok(analysisService.getAiHealthStatus(Boolean.TRUE.equals(testInfer)));
     }
 
     private void validateAdmin(HttpServletRequest request, HttpSession session) {
@@ -202,9 +274,16 @@ public class AdminController {
             }
         }
 
-        String authHeader = request.getHeader("X-Admin-Auth");
-        if (authHeader != null && !authHeader.isBlank()) {
-            return;
+        if (request != null) {
+            String authHeader = request.getHeader("X-Admin-Auth");
+            if (authHeader != null && !authHeader.isBlank()) {
+                return;
+            }
+
+            String bearerHeader = request.getHeader("Authorization");
+            if (bearerHeader != null && !bearerHeader.isBlank()) {
+                return;
+            }
         }
 
         throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Yêu cầu quyền Quản trị viên");

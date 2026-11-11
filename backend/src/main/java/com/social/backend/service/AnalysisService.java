@@ -8,6 +8,7 @@ import com.social.backend.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
@@ -323,30 +324,69 @@ public class AnalysisService {
     }
 
     /**
-     * Thống kê toàn hệ thống cho Quản trị viên
+     * Thống kê toàn hệ thống cho Quản trị viên (hỗ trợ lọc theo số ngày)
      */
-    public AdminDto.SystemStats getAdminStatistics() {
+    public AdminDto.SystemStats getAdminStatistics(Integer days) {
         long totalUsers = userRepository.count();
         long activeUsers = userRepository.countByStatus(User.UserStatus.ACTIVE);
         long blockedUsers = userRepository.countByStatus(User.UserStatus.BLOCKED);
 
-        List<AnalysisResult> allResults = analysisResultRepository.findAll();
-        long totalPosts = allResults.size();
+        List<AnalysisResult> results;
+        if (days != null && days > 0) {
+            LocalDateTime since = LocalDateTime.now().minusDays(days);
+            results = analysisResultRepository.findByCreatedAtGreaterThanEqual(since);
+        } else {
+            results = analysisResultRepository.findAll();
+        }
+
+        long totalPosts = results.size();
         long totalComments = 0;
         long toxic = 0, nonToxic = 0;
         long clean = 0, offensive = 0, hate = 0;
         long positive = 0, neutral = 0, negative = 0;
 
-        for (AnalysisResult ar : allResults) {
-            totalComments += ar.getTotalComments();
-            toxic += ar.getToxicCount();
-            nonToxic += ar.getNonToxicCount();
-            clean += ar.getCleanCount();
-            offensive += ar.getOffensiveCount();
-            hate += ar.getHateCount();
-            positive += ar.getPositiveCount();
-            neutral += ar.getNeutralCount();
-            negative += ar.getNegativeCount();
+        for (AnalysisResult ar : results) {
+            totalComments += (ar.getTotalComments() != null) ? ar.getTotalComments() : 0;
+            toxic += (ar.getToxicCount() != null) ? ar.getToxicCount() : 0;
+            nonToxic += (ar.getNonToxicCount() != null) ? ar.getNonToxicCount() : 0;
+            clean += (ar.getCleanCount() != null) ? ar.getCleanCount() : 0;
+            offensive += (ar.getOffensiveCount() != null) ? ar.getOffensiveCount() : 0;
+            hate += (ar.getHateCount() != null) ? ar.getHateCount() : 0;
+            positive += (ar.getPositiveCount() != null) ? ar.getPositiveCount() : 0;
+            neutral += (ar.getNeutralCount() != null) ? ar.getNeutralCount() : 0;
+            negative += (ar.getNegativeCount() != null) ? ar.getNegativeCount() : 0;
+        }
+
+        Double usersGrowthRate = null;
+        Double commentsGrowthRate = null;
+        Long newUsersCount = totalUsers;
+
+        if (days != null && days > 0) {
+            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime currentStart = now.minusDays(days);
+            LocalDateTime prevStart = now.minusDays(days * 2L);
+
+            // Số lượng và tỷ lệ tăng trưởng User mới kỳ này so với kỳ trước
+            long currentNewUsers = userRepository.countByCreatedAtGreaterThanEqual(currentStart);
+            newUsersCount = currentNewUsers;
+            long prevNewUsers = userRepository.countByCreatedAtBetween(prevStart, currentStart);
+            if (prevNewUsers > 0) {
+                usersGrowthRate = ((double) (currentNewUsers - prevNewUsers) / prevNewUsers) * 100.0;
+            } else {
+                usersGrowthRate = currentNewUsers > 0 ? 100.0 : 0.0;
+            }
+
+            // Tỷ lệ tăng trưởng số lượng comment phân tích PhoBERT so với kỳ trước
+            List<AnalysisResult> prevResults = analysisResultRepository.findByCreatedAtBetween(prevStart, currentStart);
+            long prevComments = 0;
+            for (AnalysisResult ar : prevResults) {
+                prevComments += (ar.getTotalComments() != null) ? ar.getTotalComments() : 0;
+            }
+            if (prevComments > 0) {
+                commentsGrowthRate = ((double) (totalComments - prevComments) / prevComments) * 100.0;
+            } else {
+                commentsGrowthRate = totalComments > 0 ? 100.0 : 0.0;
+            }
         }
 
         return new AdminDto.SystemStats(
@@ -362,7 +402,148 @@ public class AnalysisService {
                 offensive,
                 positive,
                 neutral,
-                negative
+                negative,
+                usersGrowthRate,
+                commentsGrowthRate,
+                newUsersCount
         );
+    }
+
+    public AdminDto.SystemStats getAdminStatistics() {
+        return getAdminStatistics(null);
+    }
+
+    /**
+     * Danh sách bài viết nóng có lượng bình luận độc hại / thù ghét cao nhất
+     */
+    public List<AdminDto.ToxicPostAlert> getTopToxicPosts(int limit) {
+        List<AnalysisResult> results = analysisResultRepository.findAll();
+
+        return results.stream()
+                .filter(ar -> ar.getTotalComments() != null && ar.getTotalComments() > 0)
+                .sorted((a, b) -> {
+                    int toxicA = a.getToxicCount() != null ? a.getToxicCount() : 0;
+                    int toxicB = b.getToxicCount() != null ? b.getToxicCount() : 0;
+                    if (toxicB != toxicA) return Integer.compare(toxicB, toxicA);
+                    int totA = a.getTotalComments() != null ? a.getTotalComments() : 1;
+                    int totB = b.getTotalComments() != null ? b.getTotalComments() : 1;
+                    double rateA = (double) toxicA / totA;
+                    double rateB = (double) toxicB / totB;
+                    return Double.compare(rateB, rateA);
+                })
+                .limit(limit > 0 ? limit : 5)
+                .map(ar -> {
+                    String postText = "";
+                    String permalink = "";
+                    Optional<Post> postOpt = postRepository.findByThreadsPostId(ar.getThreadsPostId());
+                    if (postOpt.isPresent()) {
+                        postText = postOpt.get().getText() != null ? postOpt.get().getText() : "";
+                        permalink = postOpt.get().getPermalink() != null ? postOpt.get().getPermalink() : "";
+                    }
+
+                    String authorUsername = "";
+                    if (ar.getThreadsUserId() != null) {
+                        authorUsername = userRepository.findByThreadsUserId(ar.getThreadsUserId())
+                                .map(u -> u.getUsername() != null ? u.getUsername() : u.getName())
+                                .orElse(ar.getThreadsUserId());
+                    }
+
+                    int total = ar.getTotalComments() != null ? ar.getTotalComments() : 0;
+                    int toxic = ar.getToxicCount() != null ? ar.getToxicCount() : 0;
+                    int nonToxic = ar.getNonToxicCount() != null ? ar.getNonToxicCount() : 0;
+                    int hate = ar.getHateCount() != null ? ar.getHateCount() : 0;
+                    int offensive = ar.getOffensiveCount() != null ? ar.getOffensiveCount() : 0;
+                    int negative = ar.getNegativeCount() != null ? ar.getNegativeCount() : 0;
+                    int pct = total > 0 ? (int) Math.round((toxic * 100.0) / total) : 0;
+
+                    String level = "LOW";
+                    if (pct >= 60 || toxic >= 10) level = "CRITICAL";
+                    else if (pct >= 35 || toxic >= 5) level = "HIGH";
+                    else if (toxic > 0) level = "MEDIUM";
+
+                    return new AdminDto.ToxicPostAlert(
+                            ar.getId(),
+                            ar.getThreadsPostId(),
+                            ar.getThreadsUserId(),
+                            authorUsername,
+                            postText,
+                            permalink,
+                            total,
+                            toxic,
+                            nonToxic,
+                            hate,
+                            offensive,
+                            negative,
+                            pct,
+                            level,
+                            ar.getCreatedAt()
+                    );
+                })
+                .toList();
+    }
+
+    /**
+     * Giám sát hiệu năng và sức khỏe của PhoBERT AI Service
+     * Đo lường thời gian ping healthcheck và thời gian suy luận thực tế (Inference Latency)
+     * @param testInfer Nếu true sẽ thực hiện thêm 1 lượt suy luận mẫu để đo tốc độ mô hình
+     */
+    public AdminDto.AiHealthStatus getAiHealthStatus(boolean testInfer) {
+        long totalPredictions = predictionRepository.count();
+        long pingStart = System.currentTimeMillis();
+
+        try {
+            // 1. Kiểm tra trạng thái và đo ping
+            Map<String, Object> aiHealth = aiServiceClient.health();
+            long latencyMs = System.currentTimeMillis() - pingStart;
+
+            // 2. Đo thời gian suy luận thực tế trên 1 câu mẫu nếu testInfer=true
+            Long inferenceLatencyMs = null;
+            if (testInfer) {
+                try {
+                    long inferStart = System.currentTimeMillis();
+                    aiServiceClient.predict("Bình luận kiểm tra hiệu năng hệ thống");
+                    inferenceLatencyMs = System.currentTimeMillis() - inferStart;
+                } catch (Exception ex) {
+                    // Nếu suy luận mẫu gặp lỗi nhẹ, vẫn giữ kết quả healthcheck
+                }
+            }
+
+            String status = latencyMs > 1000 ? "DEGRADED" : "ONLINE";
+            String device = aiHealth != null && aiHealth.get("device") != null
+                    ? String.valueOf(aiHealth.get("device")) : "CPU";
+
+            @SuppressWarnings("unchecked")
+            Map<String, Boolean> models = (aiHealth != null && aiHealth.get("models") instanceof Map)
+                    ? (Map<String, Boolean>) aiHealth.get("models") : Collections.emptyMap();
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> teencode = (aiHealth != null && aiHealth.get("teencode") instanceof Map)
+                    ? (Map<String, Object>) aiHealth.get("teencode") : Collections.emptyMap();
+
+            return new AdminDto.AiHealthStatus(
+                    status,
+                    latencyMs,
+                    inferenceLatencyMs,
+                    device,
+                    models,
+                    teencode,
+                    totalPredictions,
+                    LocalDateTime.now(),
+                    "PhoBERT AI Service đang hoạt động ổn định"
+            );
+        } catch (Exception e) {
+            long latencyMs = System.currentTimeMillis() - pingStart;
+            return new AdminDto.AiHealthStatus(
+                    "OFFLINE",
+                    latencyMs,
+                    null,
+                    "N/A",
+                    Collections.emptyMap(),
+                    Collections.emptyMap(),
+                    totalPredictions,
+                    LocalDateTime.now(),
+                    "Không thể kết nối đến AI Service: " + e.getMessage()
+            );
+        }
     }
 }

@@ -1,4 +1,4 @@
-export const API_URL = import.meta.env.VITE_API_URL;
+export const API_URL = import.meta.env.VITE_API_URL || "https://monsoon-broadness-matrimony.ngrok-free.dev";
 // cần chỉnh
 
 export const loginWithThreads = () => {
