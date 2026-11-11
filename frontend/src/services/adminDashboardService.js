@@ -61,8 +61,53 @@ export const formatRelativeTime = (dateInput) => {
   return date.toLocaleDateString("vi-VN");
 };
 
-// Lấy toàn bộ số liệu cho Admin Dashboard
-export const getAdminDashboardData = async () => {
+// Lấy thống kê phân tích độc lập cho Biểu đồ (theo mốc ngày thực tế)
+export const getChartAnalysisStats = async (days = null) => {
+  const headers = getAdminHeaders();
+  const fetchOptions = {
+    method: "GET",
+    credentials: "include",
+    headers,
+  };
+  try {
+    const url = (days !== null && days !== undefined)
+      ? `${API_URL}/api/admin/statistics?days=${days}`
+      : `${API_URL}/api/admin/statistics`;
+    const res = await fetch(url, fetchOptions);
+    if (!res.ok) return null;
+    const stats = await res.json();
+    const totalComments = Number(stats?.totalCommentsAnalyzed ?? 0);
+    const toxicCount = Number(stats?.toxicCount ?? 0);
+    const nonToxicCount = Number(stats?.nonToxicCount ?? 0);
+    const cleanCount = Number(stats?.cleanCount ?? 0);
+    const offensiveCount = Number(stats?.offensiveCount ?? 0);
+    const hateCount = Number(stats?.hateCount ?? 0);
+    const positiveCount = Number(stats?.positiveCount ?? 0);
+    const neutralCount = Number(stats?.neutralCount ?? 0);
+    const negativeCount = Number(stats?.negativeCount ?? 0);
+    const totalPosts = Number(stats?.totalPostsAnalyzed ?? 0);
+
+    return {
+      totalComments,
+      totalPosts,
+      toxic: toxicCount,
+      nonToxic: nonToxicCount,
+      clean: cleanCount,
+      offensive: offensiveCount,
+      hate: hateCount,
+      positive: positiveCount,
+      neutral: neutralCount,
+      negative: negativeCount,
+      safePercentage: totalComments > 0 ? Math.round((nonToxicCount / totalComments) * 100) : 100,
+    };
+  } catch (err) {
+    console.warn("Lỗi lấy thống kê phân tích biểu đồ:", err.message);
+    return null;
+  }
+};
+
+// Lấy toàn bộ số liệu cho Admin Dashboard (hỗ trợ lọc thời gian thực tế từ backend)
+export const getAdminDashboardData = async ({ days = null } = {}) => {
   const headers = getAdminHeaders();
   const fetchOptions = {
     method: "GET",
@@ -70,8 +115,10 @@ export const getAdminDashboardData = async () => {
     headers,
   };
 
+  const daysParam = (days !== null && days !== undefined) ? `?days=${days}` : "";
+
   // 1. Fetch hệ thống (user count, lượt comment phân tích)
-  const statsPromise = fetch(`${API_URL}/api/admin/statistics`, fetchOptions)
+  const statsPromise = fetch(`${API_URL}/api/admin/statistics${daysParam}`, fetchOptions)
     .then(async (res) => (res.ok ? await res.json() : null))
     .catch((err) => {
       console.warn("Lỗi lấy /api/admin/statistics:", err.message);
@@ -79,7 +126,7 @@ export const getAdminDashboardData = async () => {
     });
 
   // 2. Fetch gói đăng ký & doanh thu
-  const subStatsPromise = fetch(`${API_URL}/api/admin/subscriptions/stats`, fetchOptions)
+  const subStatsPromise = fetch(`${API_URL}/api/admin/subscriptions/stats${daysParam}`, fetchOptions)
     .then(async (res) => (res.ok ? await res.json() : null))
     .catch((err) => {
       console.warn("Lỗi lấy /api/admin/subscriptions/stats:", err.message);
@@ -121,11 +168,11 @@ export const getAdminDashboardData = async () => {
   // Nếu cả 2 API thống kê chính đều null -> có thể backend chưa bật hoặc mất kết nối
   const isBackendConnected = stats !== null || subStats !== null || users.length > 0;
 
-  // Tính toán chỉ số tổng hợp
-  const totalUsers = stats?.totalUsers ?? (users.length > 0 ? users.length : 2845);
-  const activeSubs = subStats?.activeSubscriptions ?? 1420;
-  const totalRevenue = subStats?.totalRevenue ?? 48500000;
-  const totalAnalysis = (stats?.totalCommentsAnalyzed || stats?.totalPostsAnalyzed) ?? 184200;
+  // Tính toán chỉ số tổng hợp (100% thực tế từ DB)
+  const totalUsers = stats?.totalUsers ?? (users.length > 0 ? users.length : 0);
+  const activeSubs = subStats?.activeSubscriptions ?? 0;
+  const totalRevenue = subStats?.totalRevenue ?? 0;
+  const totalAnalysis = (stats?.totalCommentsAnalyzed || stats?.totalPostsAnalyzed) ?? 0;
 
   // Xử lý danh sách user mới nhất
   let recentUsers = [];
@@ -194,16 +241,66 @@ export const getAdminDashboardData = async () => {
     ];
   }
 
+  const totalComments = Number(stats?.totalCommentsAnalyzed ?? 0);
+  const toxicCount = Number(stats?.toxicCount ?? 0);
+  const nonToxicCount = Number(stats?.nonToxicCount ?? 0);
+  const cleanCount = Number(stats?.cleanCount ?? 0);
+  const offensiveCount = Number(stats?.offensiveCount ?? 0);
+  const hateCount = Number(stats?.hateCount ?? 0);
+  const positiveCount = Number(stats?.positiveCount ?? 0);
+  const neutralCount = Number(stats?.neutralCount ?? 0);
+  const negativeCount = Number(stats?.negativeCount ?? 0);
+  const totalPosts = Number(stats?.totalPostsAnalyzed ?? 0);
+
+  const sentimentStats = {
+    totalComments,
+    totalPosts,
+    toxic: toxicCount,
+    nonToxic: nonToxicCount,
+    clean: cleanCount,
+    offensive: offensiveCount,
+    hate: hateCount,
+    positive: positiveCount,
+    neutral: neutralCount,
+    negative: negativeCount,
+    safePercentage: totalComments > 0 ? Math.round((nonToxicCount / totalComments) * 100) : 88,
+  };
+
+  const usersGrowthRate = (stats?.usersGrowthRate !== undefined && stats?.usersGrowthRate !== null)
+    ? Number(stats.usersGrowthRate)
+    : null;
+  const commentsGrowthRate = (stats?.commentsGrowthRate !== undefined && stats?.commentsGrowthRate !== null)
+    ? Number(stats.commentsGrowthRate)
+    : null;
+  const revenueGrowthRate = (subStats?.revenueGrowthRate !== undefined && subStats?.revenueGrowthRate !== null)
+    ? Number(subStats.revenueGrowthRate)
+    : null;
+  const subscriptionsGrowthRate = (subStats?.subscriptionsGrowthRate !== undefined && subStats?.subscriptionsGrowthRate !== null)
+    ? Number(subStats.subscriptionsGrowthRate)
+    : null;
+
+  const newUsersCount = (stats?.newUsersCount !== undefined && stats?.newUsersCount !== null)
+    ? Number(stats.newUsersCount)
+    : 0;
+
   return {
     isBackendConnected,
     rawStats: stats,
     rawSubStats: subStats,
     totalUsers,
+    newUsersCount,
     activeSubscriptions: activeSubs,
     totalRevenue,
     totalCommentsAnalyzed: totalAnalysis,
+    growthRates: {
+      users: usersGrowthRate,
+      comments: commentsGrowthRate,
+      revenue: revenueGrowthRate,
+      subscriptions: subscriptionsGrowthRate,
+    },
     recentUsers,
     planDistribution,
     planCount: Array.isArray(vipPlans) && vipPlans.length > 0 ? vipPlans.length : 3,
+    sentimentStats,
   };
 };

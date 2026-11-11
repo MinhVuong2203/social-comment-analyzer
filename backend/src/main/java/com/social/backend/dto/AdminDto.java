@@ -36,7 +36,10 @@ public class AdminDto {
             long offensiveCount,
             long positiveCount,
             long neutralCount,
-            long negativeCount
+            long negativeCount,
+            Double usersGrowthRate,
+            Double commentsGrowthRate,
+            Long newUsersCount
     ) {}
 
     public record StatusUpdateRequest(

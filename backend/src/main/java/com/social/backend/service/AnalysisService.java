@@ -8,6 +8,7 @@ import com.social.backend.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
@@ -323,30 +324,69 @@ public class AnalysisService {
     }
 
     /**
-     * Thống kê toàn hệ thống cho Quản trị viên
+     * Thống kê toàn hệ thống cho Quản trị viên (hỗ trợ lọc theo số ngày)
      */
-    public AdminDto.SystemStats getAdminStatistics() {
+    public AdminDto.SystemStats getAdminStatistics(Integer days) {
         long totalUsers = userRepository.count();
         long activeUsers = userRepository.countByStatus(User.UserStatus.ACTIVE);
         long blockedUsers = userRepository.countByStatus(User.UserStatus.BLOCKED);
 
-        List<AnalysisResult> allResults = analysisResultRepository.findAll();
-        long totalPosts = allResults.size();
+        List<AnalysisResult> results;
+        if (days != null && days > 0) {
+            LocalDateTime since = LocalDateTime.now().minusDays(days);
+            results = analysisResultRepository.findByCreatedAtGreaterThanEqual(since);
+        } else {
+            results = analysisResultRepository.findAll();
+        }
+
+        long totalPosts = results.size();
         long totalComments = 0;
         long toxic = 0, nonToxic = 0;
         long clean = 0, offensive = 0, hate = 0;
         long positive = 0, neutral = 0, negative = 0;
 
-        for (AnalysisResult ar : allResults) {
-            totalComments += ar.getTotalComments();
-            toxic += ar.getToxicCount();
-            nonToxic += ar.getNonToxicCount();
-            clean += ar.getCleanCount();
-            offensive += ar.getOffensiveCount();
-            hate += ar.getHateCount();
-            positive += ar.getPositiveCount();
-            neutral += ar.getNeutralCount();
-            negative += ar.getNegativeCount();
+        for (AnalysisResult ar : results) {
+            totalComments += (ar.getTotalComments() != null) ? ar.getTotalComments() : 0;
+            toxic += (ar.getToxicCount() != null) ? ar.getToxicCount() : 0;
+            nonToxic += (ar.getNonToxicCount() != null) ? ar.getNonToxicCount() : 0;
+            clean += (ar.getCleanCount() != null) ? ar.getCleanCount() : 0;
+            offensive += (ar.getOffensiveCount() != null) ? ar.getOffensiveCount() : 0;
+            hate += (ar.getHateCount() != null) ? ar.getHateCount() : 0;
+            positive += (ar.getPositiveCount() != null) ? ar.getPositiveCount() : 0;
+            neutral += (ar.getNeutralCount() != null) ? ar.getNeutralCount() : 0;
+            negative += (ar.getNegativeCount() != null) ? ar.getNegativeCount() : 0;
+        }
+
+        Double usersGrowthRate = null;
+        Double commentsGrowthRate = null;
+        Long newUsersCount = totalUsers;
+
+        if (days != null && days > 0) {
+            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime currentStart = now.minusDays(days);
+            LocalDateTime prevStart = now.minusDays(days * 2L);
+
+            // Số lượng và tỷ lệ tăng trưởng User mới kỳ này so với kỳ trước
+            long currentNewUsers = userRepository.countByCreatedAtGreaterThanEqual(currentStart);
+            newUsersCount = currentNewUsers;
+            long prevNewUsers = userRepository.countByCreatedAtBetween(prevStart, currentStart);
+            if (prevNewUsers > 0) {
+                usersGrowthRate = ((double) (currentNewUsers - prevNewUsers) / prevNewUsers) * 100.0;
+            } else {
+                usersGrowthRate = currentNewUsers > 0 ? 100.0 : 0.0;
+            }
+
+            // Tỷ lệ tăng trưởng số lượng comment phân tích PhoBERT so với kỳ trước
+            List<AnalysisResult> prevResults = analysisResultRepository.findByCreatedAtBetween(prevStart, currentStart);
+            long prevComments = 0;
+            for (AnalysisResult ar : prevResults) {
+                prevComments += (ar.getTotalComments() != null) ? ar.getTotalComments() : 0;
+            }
+            if (prevComments > 0) {
+                commentsGrowthRate = ((double) (totalComments - prevComments) / prevComments) * 100.0;
+            } else {
+                commentsGrowthRate = totalComments > 0 ? 100.0 : 0.0;
+            }
         }
 
         return new AdminDto.SystemStats(
@@ -362,7 +402,14 @@ public class AnalysisService {
                 offensive,
                 positive,
                 neutral,
-                negative
+                negative,
+                usersGrowthRate,
+                commentsGrowthRate,
+                newUsersCount
         );
+    }
+
+    public AdminDto.SystemStats getAdminStatistics() {
+        return getAdminStatistics(null);
     }
 }

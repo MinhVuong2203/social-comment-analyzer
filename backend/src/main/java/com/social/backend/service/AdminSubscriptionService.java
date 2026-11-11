@@ -279,20 +279,65 @@ public class AdminSubscriptionService {
     }
 
     /**
-     * Thống kê tổng quan về VIP
+     * Thống kê tổng quan về VIP (hỗ trợ lọc thời gian theo số ngày)
      */
     @Transactional(readOnly = true)
-    public VipPlanDto.OverviewStats getOverviewStats() {
+    public VipPlanDto.OverviewStats getOverviewStats(Integer days) {
         long totalPlans = vipPlanRepository.count();
         long activePlans = vipPlanRepository.findAll().stream().filter(p -> Boolean.TRUE.equals(p.getIsActive())).count();
-        long activeSubs = userSubscriptionRepository.countByStatus("ACTIVE");
-        long pendingSubs = userSubscriptionRepository.countByStatus("PENDING");
 
-        List<PaymentTransaction> payments = paymentTransactionRepository.findAll();
+        long activeSubs;
+        long pendingSubs;
+        List<PaymentTransaction> payments;
+
+        if (days != null && days > 0) {
+            OffsetDateTime since = OffsetDateTime.now().minusDays(days);
+            payments = paymentTransactionRepository.findByCreatedAtGreaterThanEqual(since);
+            activeSubs = userSubscriptionRepository.countByStatusAndCreatedAtGreaterThanEqual("ACTIVE", since);
+            pendingSubs = userSubscriptionRepository.countByStatusAndCreatedAtGreaterThanEqual("PENDING", since);
+        } else {
+            payments = paymentTransactionRepository.findAll();
+            activeSubs = userSubscriptionRepository.countByStatus("ACTIVE");
+            pendingSubs = userSubscriptionRepository.countByStatus("PENDING");
+        }
+
         BigDecimal totalRevenue = payments.stream()
                 .filter(p -> "SUCCESS".equalsIgnoreCase(p.getStatus()) && p.getAmount() != null)
                 .map(PaymentTransaction::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        Double revenueGrowthRate = null;
+        Double subscriptionsGrowthRate = null;
+
+        if (days != null && days > 0) {
+            OffsetDateTime now = OffsetDateTime.now();
+            OffsetDateTime currentStart = now.minusDays(days);
+            OffsetDateTime prevStart = now.minusDays(days * 2L);
+
+            // Tính tăng trưởng doanh thu so với kỳ trước
+            List<PaymentTransaction> prevPayments = paymentTransactionRepository.findByCreatedAtBetween(prevStart, currentStart);
+            BigDecimal prevRevenue = prevPayments.stream()
+                    .filter(p -> "SUCCESS".equalsIgnoreCase(p.getStatus()) && p.getAmount() != null)
+                    .map(PaymentTransaction::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            if (prevRevenue.compareTo(BigDecimal.ZERO) > 0) {
+                revenueGrowthRate = totalRevenue.subtract(prevRevenue)
+                        .divide(prevRevenue, 4, java.math.RoundingMode.HALF_UP)
+                        .multiply(BigDecimal.valueOf(100))
+                        .doubleValue();
+            } else {
+                revenueGrowthRate = totalRevenue.compareTo(BigDecimal.ZERO) > 0 ? 100.0 : 0.0;
+            }
+
+            // Tính tăng trưởng đăng ký VIP so với kỳ trước
+            long prevSubs = userSubscriptionRepository.countByStatusAndCreatedAtBetween("ACTIVE", prevStart, currentStart);
+            if (prevSubs > 0) {
+                subscriptionsGrowthRate = ((double) (activeSubs - prevSubs) / prevSubs) * 100.0;
+            } else {
+                subscriptionsGrowthRate = activeSubs > 0 ? 100.0 : 0.0;
+            }
+        }
 
         return VipPlanDto.OverviewStats.builder()
                 .totalPlans(totalPlans)
@@ -301,7 +346,14 @@ public class AdminSubscriptionService {
                 .pendingSubscriptions(pendingSubs)
                 .totalRevenue(totalRevenue)
                 .totalTransactions(payments.size())
+                .revenueGrowthRate(revenueGrowthRate)
+                .subscriptionsGrowthRate(subscriptionsGrowthRate)
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public VipPlanDto.OverviewStats getOverviewStats() {
+        return getOverviewStats(null);
     }
 }
 

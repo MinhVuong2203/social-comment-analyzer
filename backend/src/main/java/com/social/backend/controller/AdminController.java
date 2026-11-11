@@ -184,13 +184,17 @@ public class AdminController {
     }
 
     /**
-     * Xem thống kê toàn hệ thống
-     * GET /api/admin/statistics
+     * Xem thống kê toàn hệ thống (hỗ trợ lọc thời gian theo số ngày)
+     * GET /api/admin/statistics?days=30
      */
     @GetMapping("/statistics")
-    public ResponseEntity<AdminDto.SystemStats> getAdminStatistics(HttpServletRequest httpRequest, HttpSession session) {
+    public ResponseEntity<AdminDto.SystemStats> getAdminStatistics(
+            @RequestParam(required = false) Integer days,
+            HttpServletRequest httpRequest,
+            HttpSession session
+    ) {
         validateAdmin(httpRequest, session);
-        return ResponseEntity.ok(analysisService.getAdminStatistics());
+        return ResponseEntity.ok(analysisService.getAdminStatistics(days));
     }
 
     private void validateAdmin(HttpServletRequest request, HttpSession session) {
