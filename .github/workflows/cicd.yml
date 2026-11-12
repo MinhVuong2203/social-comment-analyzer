@@ -2,7 +2,7 @@ name: CI/CD
 
 on:
   push:
-    branches: [main, feature/cicd]   # TẠM: feature/cicd để test, xong thì xóa           # push main  → chỉ build + test
+    branches: [main]   # push main  → chỉ build + test
     tags: ['v*']                # push tag   → build + test + docker push
   pull_request:
     branches: [main, develop]   # kiểm tra PR trước khi merge
