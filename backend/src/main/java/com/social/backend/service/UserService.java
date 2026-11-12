@@ -14,6 +14,7 @@ import com.social.backend.repository.PostRepository;
 import com.social.backend.repository.UserRepository;
 import com.social.backend.repository.UserSubscriptionRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +41,16 @@ public class UserService {
     private final UserLimitService userLimitService;
     private final JdbcTemplate jdbcTemplate;
 
+    public UserService(
+            UserRepository userRepository,
+            PostRepository postRepository,
+            AnalysisResultRepository analysisResultRepository,
+            JdbcTemplate jdbcTemplate
+    ) {
+        this(userRepository, postRepository, analysisResultRepository, null, null, null, null, jdbcTemplate);
+    }
+
+    @Autowired
     public UserService(
             UserRepository userRepository,
             PostRepository postRepository,
