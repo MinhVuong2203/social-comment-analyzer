@@ -24,7 +24,8 @@ import {
   ExternalLink,
   Gauge,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Download
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getAdminUsers, getUserActivity, lockUser, unlockUser } from '../services/adminUserService';
@@ -369,6 +370,72 @@ export default function AdminUsersPage() {
     return pages;
   };
 
+  const handleExportCsv = () => {
+    if (!filteredUsers.length) {
+      showToast('error', 'Không có dữ liệu người dùng để xuất.');
+      return;
+    }
+
+    const escapeCsv = (value) => {
+      const str = value === null || value === undefined ? '' : String(value);
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    const headers = [
+      'ID',
+      'Threads User ID',
+      'Tên hiển thị',
+      'Username',
+      'Vai trò',
+      'Trạng thái',
+      'Gói VIP',
+      'Số ngày VIP còn lại',
+      'Hết hạn VIP',
+      'Số bài đã phân tích',
+      'Hạn khóa',
+      'Lý do khóa',
+      'Ngày tham gia',
+      'Đăng nhập lần cuối'
+    ];
+
+    const rows = filteredUsers.map((u) => [
+      u.id,
+      u.threadsUserId ? `="${String(u.threadsUserId).replace(/"/g, '')}"` : '',
+      (u.name && u.name.trim()) ? u.name : (u.username || 'Chưa đặt tên'),
+      u.username || '',
+      u.role || 'USER',
+      u.status === 'BLOCKED' ? 'Đang bị khóa' : 'Hoạt động',
+      u.vipPlanName || 'Gói Free',
+      u.isVip && u.vipDaysRemaining !== null ? u.vipDaysRemaining : '',
+      u.isVip && u.vipEndAt ? formatDateTime(u.vipEndAt) : '',
+      u.postsAnalyzedCount ?? 0,
+      u.status === 'BLOCKED' ? (u.blockedUntil ? formatDateTime(u.blockedUntil) : 'Vĩnh viễn') : '',
+      u.status === 'BLOCKED' ? (u.blockReason || '') : '',
+      u.createdAt ? formatDateTime(u.createdAt) : '',
+      u.lastLoginAt ? formatDateTime(u.lastLoginAt) : ''
+    ]);
+
+    const csvContent = [
+      headers.map(escapeCsv).join(','),
+      ...rows.map((row) => row.map(escapeCsv).join(','))
+    ].join('\r\n');
+
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const now = new Date();
+    const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `users_export_${stamp}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast('success', `Đã xuất ${filteredUsers.length} người dùng ra file CSV.`);
+  };
+
   return (
     <div className="w-full h-full min-h-screen bg-[#13131f] text-[#f1f5f9] font-['Inter'] flex flex-col text-xs select-none">
       {/* Top Header */}
@@ -394,15 +461,28 @@ export default function AdminUsersPage() {
           </div>
         </div>
 
-        <button
-          onClick={fetchUsersList}
-          disabled={loading}
-          className="p-1.5 rounded-lg bg-[#1e1e35] text-[#94a3b8] hover:text-white hover:bg-[#282a30] transition flex items-center space-x-1"
-          title="Tải lại danh sách"
-        >
-          <RefreshCw size={12} className={loading ? 'animate-spin text-[#4cd7f6]' : ''} />
-          <span className="text-[10px]">Làm mới</span>
-        </button>
+        <div className="flex items-center space-x-1.5">
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            disabled={loading || filteredUsers.length === 0}
+            className="px-2 py-1.5 rounded-lg bg-[#4edea3]/15 hover:bg-[#4edea3]/25 text-[#4edea3] border border-[#4edea3]/30 transition flex items-center space-x-1 disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Xuất danh sách người dùng đang lọc ra file CSV (Excel)"
+          >
+            <Download size={12} />
+            <span className="text-[10px] font-medium">Xuất CSV</span>
+          </button>
+
+          <button
+            onClick={fetchUsersList}
+            disabled={loading}
+            className="p-1.5 rounded-lg bg-[#1e1e35] text-[#94a3b8] hover:text-white hover:bg-[#282a30] transition flex items-center space-x-1"
+            title="Tải lại danh sách"
+          >
+            <RefreshCw size={12} className={loading ? 'animate-spin text-[#4cd7f6]' : ''} />
+            <span className="text-[10px]">Làm mới</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Content */}
