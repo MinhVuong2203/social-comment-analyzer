@@ -14,11 +14,13 @@ import {
   Filter,
   Crown,
   Calendar,
-  RotateCcw
+  RotateCcw,
+  ShieldOff,
+  Sparkles
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getAdminUsers, lockUser, unlockUser } from '../services/adminUserService';
-import { getUserSubscriptions, getVipPlans } from '../services/adminSubscriptionService';
+import { getUserSubscriptions, getVipPlans, manualGrantSubscription, revokeUserVip } from '../services/adminSubscriptionService';
 
 export default function AdminUsersPage() {
   const navigate = useNavigate();
@@ -44,6 +46,11 @@ export default function AdminUsersPage() {
   // Modal State for User Details
   const [detailModalUser, setDetailModalUser] = useState(null);
 
+  // Modal State for Grant VIP
+  const [grantVipModalUser, setGrantVipModalUser] = useState(null);
+  const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [customDurationDays, setCustomDurationDays] = useState('');
+
   const fetchUsersList = async () => {
     setLoading(true);
     setError(null);
@@ -59,13 +66,13 @@ export default function AdminUsersPage() {
 
       setAvailablePlans(Array.isArray(plansData) ? plansData : []);
 
-      // Ghép thông tin gói VIP vào từng user
+      // Ghép thông tin gói VIP đang hoạt động vào từng user
       const mappedUsers = (Array.isArray(usersData) ? usersData : []).map(u => {
         const userSub = Array.isArray(subsData) 
-          ? subsData.find(s => s.userId === u.id || s.username === u.username)
+          ? subsData.find(s => (s.userId === u.id || s.username === u.username) && s.status === 'ACTIVE')
           : null;
 
-        const isVip = userSub && userSub.status === 'ACTIVE';
+        const isVip = Boolean(userSub && userSub.status === 'ACTIVE');
         const vipPlanName = isVip ? (userSub.planName || userSub.planCode) : 'Gói Free';
         const vipPlanCode = isVip ? userSub.planCode : 'FREE';
 
@@ -80,6 +87,7 @@ export default function AdminUsersPage() {
       });
 
       setUsers(mappedUsers);
+      setDetailModalUser(prev => (prev ? mappedUsers.find(mu => mu.id === prev.id) || null : null));
     } catch (err) {
       setError(err.message || 'Không thể tải danh sách người dùng.');
     } finally {
@@ -119,6 +127,66 @@ export default function AdminUsersPage() {
       await fetchUsersList();
     } catch (err) {
       alert(err.message || 'Lỗi khi mở khóa tài khoản');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleOpenGrantVipModal = (user) => {
+    const activePlans = availablePlans.filter(p => p.isActive !== false);
+    const matchedPlan = user.isVip
+      ? activePlans.find(p => p.planCode === user.vipPlanCode)
+      : null;
+    const defaultPlan = matchedPlan || activePlans[0] || availablePlans[0];
+
+    setGrantVipModalUser(user);
+    setSelectedPlanId(defaultPlan ? String(defaultPlan.id) : '');
+    setCustomDurationDays('');
+  };
+
+  const handleConfirmGrantVip = async () => {
+    if (!grantVipModalUser || !selectedPlanId) return;
+
+    let customDays = null;
+    if (customDurationDays.trim() !== '') {
+      const parsed = Number(customDurationDays.trim());
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        alert('Số ngày hiệu lực tùy chỉnh phải là số nguyên dương.');
+        return;
+      }
+      customDays = parsed;
+    }
+
+    setActionLoadingId(grantVipModalUser.id);
+    try {
+      await manualGrantSubscription({
+        userId: grantVipModalUser.id,
+        vipPlanId: Number(selectedPlanId),
+        customDurationDays: customDays,
+        username: grantVipModalUser.username
+      });
+      setGrantVipModalUser(null);
+      await fetchUsersList();
+    } catch (err) {
+      alert(err.message || 'Lỗi khi cấp quyền VIP');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleRevokeVip = async (user) => {
+    if (!user) return;
+    const confirmed = window.confirm(
+      `Bạn có chắc chắn muốn thu hồi quyền VIP (${user.vipPlanName}) của @${user.username || user.id}? Tài khoản sẽ quay về gói Free ngay lập tức.`
+    );
+    if (!confirmed) return;
+
+    setActionLoadingId(user.id);
+    try {
+      await revokeUserVip(user.id);
+      await fetchUsersList();
+    } catch (err) {
+      alert(err.message || 'Lỗi khi thu hồi quyền VIP');
     } finally {
       setActionLoadingId(null);
     }
@@ -464,6 +532,28 @@ export default function AdminUsersPage() {
                       <span>Chi tiết</span>
                     </button>
 
+                    <button
+                      onClick={() => handleOpenGrantVipModal(u)}
+                      disabled={isLoadingAction}
+                      className="px-2.5 py-1 bg-[#f59e0b]/15 hover:bg-[#f59e0b]/25 text-[#fbbf24] border border-[#f59e0b]/30 rounded text-[10px] transition font-medium flex items-center justify-center space-x-1 disabled:opacity-50"
+                      title={u.isVip ? 'Đổi gói hoặc gia hạn VIP' : 'Cấp VIP trực tiếp'}
+                    >
+                      <Crown size={11} />
+                      <span>{u.isVip ? 'Đổi VIP' : 'Cấp VIP'}</span>
+                    </button>
+
+                    {u.isVip && (
+                      <button
+                        onClick={() => handleRevokeVip(u)}
+                        disabled={isLoadingAction}
+                        className="px-2.5 py-1 bg-[#fb7185]/15 hover:bg-[#fb7185]/25 text-[#fda4af] border border-[#fb7185]/25 rounded text-[10px] transition font-medium flex items-center justify-center space-x-1 disabled:opacity-50"
+                        title="Thu hồi quyền VIP ngay lập tức"
+                      >
+                        <ShieldOff size={11} />
+                        <span>{isLoadingAction ? '...' : 'Hủy VIP'}</span>
+                      </button>
+                    )}
+
                     {isBlocked ? (
                       <button 
                         onClick={() => handleUnlock(u.id)}
@@ -654,13 +744,170 @@ export default function AdminUsersPage() {
               </div>
             </div>
 
-            <div className="flex justify-end pt-2 border-t border-white/10">
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
+              <div className="flex items-center space-x-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleOpenGrantVipModal(detailModalUser)}
+                  disabled={actionLoadingId === detailModalUser.id}
+                  className="px-2.5 py-1.5 rounded-lg bg-[#f59e0b]/20 hover:bg-[#f59e0b]/30 text-[#fbbf24] border border-[#f59e0b]/30 text-[11px] font-medium transition flex items-center space-x-1 disabled:opacity-50"
+                >
+                  <Crown size={12} />
+                  <span>{detailModalUser.isVip ? 'Đổi / Gia hạn VIP' : 'Cấp VIP'}</span>
+                </button>
+                {detailModalUser.isVip && (
+                  <button
+                    type="button"
+                    onClick={() => handleRevokeVip(detailModalUser)}
+                    disabled={actionLoadingId === detailModalUser.id}
+                    className="px-2.5 py-1.5 rounded-lg bg-[#fb7185]/15 hover:bg-[#fb7185]/25 text-[#fda4af] border border-[#fb7185]/30 text-[11px] font-medium transition flex items-center space-x-1 disabled:opacity-50"
+                  >
+                    <ShieldOff size={12} />
+                    <span>{actionLoadingId === detailModalUser.id ? '...' : 'Thu hồi VIP'}</span>
+                  </button>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setDetailModalUser(null)}
                 className="px-3 py-1.5 rounded-lg bg-[#282a30] hover:bg-[#33343b] text-[#cbd5e1] text-[11px] font-medium transition"
               >
                 Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Grant VIP Modal */}
+      {grantVipModalUser && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#181829] border border-[#f59e0b]/30 rounded-xl w-full max-w-xs p-4 shadow-2xl space-y-3">
+            <div className="flex items-center justify-between border-b border-white/10 pb-2">
+              <div className="flex items-center space-x-1.5 text-[#fbbf24] font-bold text-[13px]">
+                <Crown size={15} />
+                <span>Cấp / Gia hạn VIP</span>
+              </div>
+              <button
+                onClick={() => setGrantVipModalUser(null)}
+                className="text-[#94a3b8] hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              <div className="bg-[#121221] border border-white/5 rounded-lg p-2 flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-semibold text-white">
+                    @{grantVipModalUser.username || 'user'}
+                  </div>
+                  <div className="text-[10px] text-[#94a3b8]">
+                    Hiện tại: <span className={grantVipModalUser.isVip ? 'text-[#fbbf24]' : 'text-[#cbd5e1]'}>
+                      {grantVipModalUser.vipPlanName}
+                    </span>
+                  </div>
+                </div>
+                {grantVipModalUser.isVip && grantVipModalUser.vipDaysRemaining !== null && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#f59e0b]/15 text-[#fbbf24] border border-[#f59e0b]/30">
+                    Còn {grantVipModalUser.vipDaysRemaining} ngày
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <label className="text-[10px] text-[#94a3b8] font-medium block mb-1">
+                  Chọn gói VIP
+                </label>
+                {availablePlans.filter(p => p.isActive !== false).length === 0 ? (
+                  <div className="text-[10px] text-[#ffb4ab] bg-[#93000a]/20 border border-[#ffb4ab]/20 rounded p-2">
+                    Không tìm thấy gói VIP khả dụng.
+                  </div>
+                ) : (
+                  <div className="space-y-1 max-h-36 overflow-y-auto pr-0.5">
+                    {availablePlans
+                      .filter(p => p.isActive !== false)
+                      .map((plan) => {
+                        const isSelected = String(plan.id) === String(selectedPlanId);
+                        const priceText = plan.price && Number(plan.price) > 0
+                          ? `${Number(plan.price).toLocaleString('vi-VN')}đ`
+                          : 'Miễn phí';
+                        return (
+                          <button
+                            key={plan.id}
+                            type="button"
+                            onClick={() => setSelectedPlanId(String(plan.id))}
+                            className={`w-full text-left px-2.5 py-1.5 rounded-lg border transition flex items-center justify-between ${
+                              isSelected
+                                ? 'bg-[#f59e0b]/15 border-[#f59e0b]/50 text-white'
+                                : 'bg-[#121221] border-white/10 text-[#cbd5e1] hover:border-white/20'
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <div className="text-[11px] font-semibold flex items-center space-x-1">
+                                <Sparkles size={10} className={isSelected ? 'text-[#fbbf24]' : 'text-[#64748b]'} />
+                                <span className="truncate">{plan.planName}</span>
+                              </div>
+                              <div className="text-[9px] text-[#94a3b8]">
+                                Mặc định: {plan.durationDays} ngày
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-medium text-[#4edea3] shrink-0 ml-2">
+                              {priceText}
+                            </span>
+                          </button>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="text-[10px] text-[#94a3b8] font-medium block mb-1">
+                  Số ngày tùy chỉnh (tùy chọn)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={customDurationDays}
+                  onChange={(e) => setCustomDurationDays(e.target.value)}
+                  placeholder="Để trống = dùng mặc định của gói"
+                  className="w-full px-2.5 py-1.5 bg-[#121221] border border-white/10 rounded-lg text-white text-[11px] focus:outline-none focus:border-[#f59e0b]/50"
+                />
+                <div className="flex items-center gap-1 mt-1.5">
+                  {[7, 14, 30, 90].map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setCustomDurationDays(prev => (prev === String(d) ? '' : String(d)))}
+                      className={`px-2 py-0.5 rounded text-[9px] border transition ${
+                        customDurationDays === String(d)
+                          ? 'bg-[#f59e0b]/20 text-[#fbbf24] border-[#f59e0b]/40'
+                          : 'bg-[#121221] text-[#94a3b8] border-white/10 hover:text-white'
+                      }`}
+                    >
+                      {d} ngày
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setGrantVipModalUser(null)}
+                className="px-3 py-1.5 rounded-lg bg-[#282a30] hover:bg-[#33343b] text-[#cbd5e1] text-[11px] font-medium transition"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={actionLoadingId === grantVipModalUser.id || !selectedPlanId}
+                onClick={handleConfirmGrantVip}
+                className="px-3 py-1.5 rounded-lg bg-[#f59e0b] hover:bg-[#d97706] text-[#121221] text-[11px] font-bold transition disabled:opacity-50"
+              >
+                {actionLoadingId === grantVipModalUser.id ? 'Đang cấp...' : 'Xác nhận cấp VIP'}
               </button>
             </div>
           </div>

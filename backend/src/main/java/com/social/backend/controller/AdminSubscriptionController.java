@@ -185,6 +185,23 @@ public class AdminSubscriptionController {
     }
 
     /**
+     * Thu hồi quyền VIP đang hoạt động của user
+     */
+    @PostMapping("/subscriptions/revoke/{userId}")
+    public ResponseEntity<?> revokeUserVip(
+            @PathVariable Long userId,
+            HttpServletRequest request,
+            HttpSession session
+    ) {
+        validateAdmin(request, session);
+        try {
+            return ResponseEntity.ok(subscriptionService.revokeUserVip(userId));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
      * Danh sách giao dịch thanh toán VIP
      */
     @GetMapping("/subscriptions/payments")
