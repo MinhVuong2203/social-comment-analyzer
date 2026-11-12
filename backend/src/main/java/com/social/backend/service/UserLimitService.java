@@ -191,7 +191,7 @@ public class UserLimitService {
         return FREE_DAILY_EXPORT_LIMIT;
     }
 
-    private Long getAppUserId(User user) {
+    public Long getAppUserId(User user) {
         try {
             String threadsUserId = user.getThreadsUserId() != null
                     ? user.getThreadsUserId() : "user_" + user.getId();

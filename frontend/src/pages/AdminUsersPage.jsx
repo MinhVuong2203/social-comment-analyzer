@@ -16,10 +16,16 @@ import {
   Calendar,
   RotateCcw,
   ShieldOff,
-  Sparkles
+  Sparkles,
+  Activity,
+  FileText,
+  CreditCard,
+  History,
+  ExternalLink,
+  Gauge
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getAdminUsers, lockUser, unlockUser } from '../services/adminUserService';
+import { getAdminUsers, getUserActivity, lockUser, unlockUser } from '../services/adminUserService';
 import { getUserSubscriptions, getVipPlans, manualGrantSubscription, revokeUserVip } from '../services/adminSubscriptionService';
 
 export default function AdminUsersPage() {
@@ -43,8 +49,12 @@ export default function AdminUsersPage() {
   const [lockDuration, setLockDuration] = useState('1_DAY');
   const [lockReason, setLockReason] = useState('');
 
-  // Modal State for User Details
+  // Modal State for User Details (Drill-down)
   const [detailModalUser, setDetailModalUser] = useState(null);
+  const [detailTab, setDetailTab] = useState('overview'); // overview, posts, vip, logs
+  const [drilldownData, setDrilldownData] = useState(null);
+  const [drilldownLoading, setDrilldownLoading] = useState(false);
+  const [drilldownError, setDrilldownError] = useState(null);
 
   // Modal State for Grant VIP
   const [grantVipModalUser, setGrantVipModalUser] = useState(null);
@@ -107,11 +117,15 @@ export default function AdminUsersPage() {
 
   const handleConfirmLock = async () => {
     if (!lockModalUser) return;
-    setActionLoadingId(lockModalUser.id);
+    const targetId = lockModalUser.id;
+    setActionLoadingId(targetId);
     try {
-      await lockUser(lockModalUser.id, lockDuration, lockReason);
+      await lockUser(targetId, lockDuration, lockReason);
       setLockModalUser(null);
       await fetchUsersList();
+      if (detailModalUser?.id === targetId) {
+        fetchUserDrilldown(targetId);
+      }
     } catch (err) {
       alert(err.message || 'Lỗi khi khóa tài khoản');
     } finally {
@@ -125,6 +139,9 @@ export default function AdminUsersPage() {
     try {
       await unlockUser(userId);
       await fetchUsersList();
+      if (detailModalUser?.id === userId) {
+        fetchUserDrilldown(userId);
+      }
     } catch (err) {
       alert(err.message || 'Lỗi khi mở khóa tài khoản');
     } finally {
@@ -144,6 +161,27 @@ export default function AdminUsersPage() {
     setCustomDurationDays('');
   };
 
+  const fetchUserDrilldown = async (userId) => {
+    setDrilldownLoading(true);
+    setDrilldownError(null);
+    try {
+      const data = await getUserActivity(userId);
+      setDrilldownData(data);
+    } catch (err) {
+      setDrilldownError(err.message || 'Không thể tải dữ liệu hoạt động chi tiết.');
+    } finally {
+      setDrilldownLoading(false);
+    }
+  };
+
+  const handleOpenDetailModal = (user) => {
+    setDetailModalUser(user);
+    setDetailTab('overview');
+    setDrilldownData(null);
+    setDrilldownError(null);
+    fetchUserDrilldown(user.id);
+  };
+
   const handleConfirmGrantVip = async () => {
     if (!grantVipModalUser || !selectedPlanId) return;
 
@@ -157,16 +195,20 @@ export default function AdminUsersPage() {
       customDays = parsed;
     }
 
-    setActionLoadingId(grantVipModalUser.id);
+    const targetId = grantVipModalUser.id;
+    setActionLoadingId(targetId);
     try {
       await manualGrantSubscription({
-        userId: grantVipModalUser.id,
+        userId: targetId,
         vipPlanId: Number(selectedPlanId),
         customDurationDays: customDays,
         username: grantVipModalUser.username
       });
       setGrantVipModalUser(null);
       await fetchUsersList();
+      if (detailModalUser?.id === targetId) {
+        fetchUserDrilldown(targetId);
+      }
     } catch (err) {
       alert(err.message || 'Lỗi khi cấp quyền VIP');
     } finally {
@@ -185,6 +227,9 @@ export default function AdminUsersPage() {
     try {
       await revokeUserVip(user.id);
       await fetchUsersList();
+      if (detailModalUser?.id === user.id) {
+        fetchUserDrilldown(user.id);
+      }
     } catch (err) {
       alert(err.message || 'Lỗi khi thu hồi quyền VIP');
     } finally {
@@ -525,7 +570,7 @@ export default function AdminUsersPage() {
                   {/* Actions */}
                   <div className="flex flex-col space-y-1 shrink-0">
                     <button 
-                      onClick={() => setDetailModalUser(u)}
+                      onClick={() => handleOpenDetailModal(u)}
                       className="px-2.5 py-1 bg-[#282a30] hover:bg-[#33343b] text-[#f1f5f9] rounded text-[10px] transition font-medium flex items-center justify-center space-x-1"
                     >
                       <Info size={11} />
@@ -583,7 +628,7 @@ export default function AdminUsersPage() {
 
       {/* Modal Khóa Tài Khoản */}
       {lockModalUser && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 animate-fadeIn">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-3 animate-fadeIn">
           <div className="bg-[#181829] border border-white/10 rounded-xl w-full max-w-sm p-4 space-y-3.5 shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
               <div className="flex items-center space-x-2 text-[#ffb4ab]">
@@ -664,95 +709,394 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      {/* Modal Xem Chi Tiết User */}
+      {/* Modal Xem Sâu Chi Tiết Hoạt Động User (Drill-down) */}
       {detailModalUser && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 animate-fadeIn">
-          <div className="bg-[#181829] border border-white/10 rounded-xl w-full max-w-sm p-4 space-y-3 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
-              <span className="font-['Plus_Jakarta_Sans'] font-bold text-sm text-white">Chi tiết Người dùng</span>
-              <button 
-                onClick={() => setDetailModalUser(null)}
-                className="text-[#94a3b8] hover:text-white transition p-1"
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            <div className="space-y-2 text-[11px]">
-              <div className="flex items-center space-x-2.5">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-3 animate-fadeIn">
+          <div className="bg-[#181829] border border-white/10 rounded-xl w-full max-w-lg max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 bg-[#141424] shrink-0">
+              <div className="flex items-center space-x-2.5 min-w-0">
                 {detailModalUser.profilePictureUrl ? (
-                  <img src={detailModalUser.profilePictureUrl} alt="" className="w-10 h-10 rounded-full border border-white/20" />
+                  <img src={detailModalUser.profilePictureUrl} alt="" className="w-9 h-9 rounded-full border border-white/20 shrink-0" />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-[#252542] flex items-center justify-center text-sm font-bold text-[#c0c1ff]">
+                  <div className="w-9 h-9 rounded-full bg-[#252542] flex items-center justify-center text-sm font-bold text-[#c0c1ff] shrink-0">
                     {(detailModalUser.name || 'U').charAt(0)}
                   </div>
                 )}
-                <div>
-                  <h4 className="font-bold text-sm text-white">{detailModalUser.name || 'Chưa đặt tên'}</h4>
-                  <p className="text-[10px] text-[#4cd7f6] font-['JetBrains_Mono']">@{detailModalUser.username}</p>
+                <div className="min-w-0">
+                  <div className="flex items-center space-x-1.5">
+                    <h4 className="font-['Plus_Jakarta_Sans'] font-bold text-sm text-white truncate">
+                      {detailModalUser.name || 'Chưa đặt tên'}
+                    </h4>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                      detailModalUser.status === 'BLOCKED'
+                        ? 'bg-[#93000a]/30 text-[#ffb4ab] border border-[#ffb4ab]/20'
+                        : 'bg-[#4edea3]/15 text-[#4edea3] border border-[#4edea3]/20'
+                    }`}>
+                      {detailModalUser.status}
+                    </span>
+                    {detailModalUser.isVip && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#f59e0b]/15 text-[#fbbf24] border border-[#f59e0b]/30">
+                        👑 {detailModalUser.vipPlanName}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-[#4cd7f6] font-['JetBrains_Mono'] truncate">
+                    @{detailModalUser.username} • ID #{detailModalUser.id}
+                  </p>
                 </div>
               </div>
-
-              <div className="bg-[#121221] rounded-lg p-2.5 space-y-1.5 border border-white/5 font-['JetBrains_Mono'] text-[10px]">
-                <div className="flex justify-between">
-                  <span className="text-[#94a3b8]">ID Database:</span>
-                  <span className="text-white">{detailModalUser.id}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#94a3b8]">Threads User ID:</span>
-                  <span className="text-[#4cd7f6]">{detailModalUser.threadsUserId}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#94a3b8]">Vai trò:</span>
-                  <span className="text-white">{detailModalUser.role}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[#94a3b8]">Gói VIP:</span>
-                  <span className={detailModalUser.isVip ? "text-[#f59e0b] font-bold flex items-center space-x-1" : "text-[#94a3b8]"}>
-                    {detailModalUser.isVip && <span>👑</span>}
-                    <span>{detailModalUser.vipPlanName}</span>
-                  </span>
-                </div>
-                {detailModalUser.isVip && detailModalUser.vipDaysRemaining !== null && (
-                  <div className="flex justify-between">
-                    <span className="text-[#94a3b8]">Hạn VIP còn lại:</span>
-                    <span className="text-[#4edea3]">{detailModalUser.vipDaysRemaining} ngày</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-[#94a3b8]">Trạng thái tài khoản:</span>
-                  <span className={detailModalUser.status === 'BLOCKED' ? 'text-[#ffb4ab]' : 'text-[#4edea3]'}>
-                    {detailModalUser.status}
-                  </span>
-                </div>
-                {detailModalUser.status === 'BLOCKED' && (
-                  <div className="flex justify-between">
-                    <span className="text-[#94a3b8]">Hạn khóa:</span>
-                    <span className="text-[#ffb4ab]">
-                      {detailModalUser.blockedUntil ? formatDateTime(detailModalUser.blockedUntil) : 'Vĩnh viễn'}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-[#94a3b8]">Ngày tham gia:</span>
-                  <span className="text-white">{formatDateTime(detailModalUser.createdAt)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#94a3b8]">Đăng nhập lần cuối:</span>
-                  <span className="text-white">{formatDateTime(detailModalUser.lastLoginAt)}</span>
-                </div>
+              <div className="flex items-center space-x-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => fetchUserDrilldown(detailModalUser.id)}
+                  disabled={drilldownLoading}
+                  className="text-[#94a3b8] hover:text-white transition p-1.5 rounded hover:bg-white/5 disabled:opacity-50"
+                  title="Tải lại dữ liệu hoạt động"
+                >
+                  <RefreshCw size={14} className={drilldownLoading ? 'animate-spin' : ''} />
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setDetailModalUser(null)}
+                  className="text-[#94a3b8] hover:text-white transition p-1.5 rounded hover:bg-white/5"
+                >
+                  <X size={15} />
+                </button>
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
-              <div className="flex items-center space-x-1.5">
+            {/* Drill-down Tabs */}
+            <div className="grid grid-cols-4 border-b border-white/10 bg-[#121221] text-[10px] font-medium shrink-0">
+              {[
+                { id: 'overview', label: 'Tổng quan', icon: Gauge },
+                { id: 'posts', label: `Bài viết${drilldownData ? ` (${drilldownData.recentPosts?.length || 0})` : ''}`, icon: FileText },
+                { id: 'vip', label: `VIP & GD${drilldownData ? ` (${(drilldownData.subscriptions?.length || 0) + (drilldownData.payments?.length || 0)})` : ''}`, icon: CreditCard },
+                { id: 'logs', label: `Nhật ký${drilldownData ? ` (${drilldownData.auditLogs?.length || 0})` : ''}`, icon: History }
+              ].map((tab) => {
+                const Icon = tab.icon;
+                const active = detailTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setDetailTab(tab.id)}
+                    className={`py-2 px-1.5 flex items-center justify-center space-x-1 border-b-2 transition ${
+                      active
+                        ? 'border-[#4cd7f6] text-[#4cd7f6] bg-[#181829]'
+                        : 'border-transparent text-[#94a3b8] hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <Icon size={11} />
+                    <span className="truncate">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Tab Content */}
+            <div className="flex-1 overflow-y-auto p-3.5 space-y-3 text-[11px]">
+              {drilldownError && (
+                <div className="bg-[#93000a]/20 border border-[#ffb4ab]/30 text-[#ffb4ab] px-3 py-2 rounded-lg text-[10px] flex items-center space-x-1.5">
+                  <AlertTriangle size={13} className="shrink-0" />
+                  <span>{drilldownError}</span>
+                </div>
+              )}
+
+              {detailTab === 'overview' && (
+                <div className="space-y-3">
+                  {/* Quota hôm nay */}
+                  <div className="space-y-1.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-[#94a3b8] flex items-center space-x-1">
+                      <Activity size={11} className="text-[#4cd7f6]" />
+                      <span>Hạn mức sử dụng hôm nay (Quota)</span>
+                    </div>
+                    {drilldownLoading && !drilldownData ? (
+                      <div className="bg-[#121221] border border-white/5 rounded-lg p-3 text-center text-[#94a3b8] text-[10px]">
+                        Đang tải số liệu hoạt động...
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-[#121221] border border-white/10 rounded-lg p-2.5">
+                          <div className="text-[9px] text-[#94a3b8]">Phân tích bài viết hôm nay</div>
+                          <div className="text-sm font-bold text-white mt-0.5 font-['JetBrains_Mono']">
+                            {drilldownData?.quota?.todayAnalysisCount ?? 0}
+                            <span className="text-[10px] font-normal text-[#94a3b8]">
+                              {drilldownData?.quota?.unlimited ? ' / ∞ (VIP)' : ` / ${drilldownData?.quota?.dailyAnalyzeLimit ?? 3}`}
+                            </span>
+                          </div>
+                          {!drilldownData?.quota?.unlimited && (
+                            <div className="text-[9px] text-[#4cd7f6] mt-0.5">
+                              Còn lại: {drilldownData?.quota?.remainingAnalysis ?? 3} lượt
+                            </div>
+                          )}
+                        </div>
+                        <div className="bg-[#121221] border border-white/10 rounded-lg p-2.5">
+                          <div className="text-[9px] text-[#94a3b8]">Xuất báo cáo hôm nay</div>
+                          <div className="text-sm font-bold text-white mt-0.5 font-['JetBrains_Mono']">
+                            {drilldownData?.quota?.todayExportCount ?? 0}
+                            <span className="text-[10px] font-normal text-[#94a3b8]">
+                              {drilldownData?.quota?.unlimited ? ' / ∞ (VIP)' : ` / ${drilldownData?.quota?.dailyExportLimit ?? 3}`}
+                            </span>
+                          </div>
+                          {!drilldownData?.quota?.unlimited && (
+                            <div className="text-[9px] text-[#4edea3] mt-0.5">
+                              Còn lại: {drilldownData?.quota?.remainingExports ?? 3} lượt
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Thống kê tích lũy */}
+                  {drilldownData?.quota && (
+                    <div className="grid grid-cols-4 gap-1.5">
+                      <div className="bg-[#121221] border border-white/5 rounded-lg p-2 text-center">
+                        <div className="text-[9px] text-[#94a3b8]">Bài viết</div>
+                        <div className="text-xs font-bold text-white font-['JetBrains_Mono'] mt-0.5">
+                          {drilldownData.quota.totalPostsCount}
+                        </div>
+                      </div>
+                      <div className="bg-[#121221] border border-white/5 rounded-lg p-2 text-center">
+                        <div className="text-[9px] text-[#94a3b8]">Bình luận</div>
+                        <div className="text-xs font-bold text-[#4cd7f6] font-['JetBrains_Mono'] mt-0.5">
+                          {drilldownData.quota.totalCommentsAnalyzed}
+                        </div>
+                      </div>
+                      <div className="bg-[#121221] border border-white/5 rounded-lg p-2 text-center">
+                        <div className="text-[9px] text-[#94a3b8]">Độc hại</div>
+                        <div className="text-xs font-bold text-[#ffb4ab] font-['JetBrains_Mono'] mt-0.5">
+                          {drilldownData.quota.totalToxicComments}
+                        </div>
+                      </div>
+                      <div className="bg-[#121221] border border-white/5 rounded-lg p-2 text-center">
+                        <div className="text-[9px] text-[#94a3b8]">Tổng chi VIP</div>
+                        <div className="text-[11px] font-bold text-[#fbbf24] font-['JetBrains_Mono'] mt-0.5">
+                          {Number(drilldownData.quota.totalSpentVnd || 0).toLocaleString('vi-VN')}đ
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Thông tin tài khoản */}
+                  <div className="bg-[#121221] rounded-lg p-2.5 space-y-1.5 border border-white/5 font-['JetBrains_Mono'] text-[10px]">
+                    <div className="flex justify-between">
+                      <span className="text-[#94a3b8]">Threads User ID:</span>
+                      <span className="text-[#4cd7f6]">{detailModalUser.threadsUserId}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#94a3b8]">Vai trò:</span>
+                      <span className="text-white">{detailModalUser.role}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[#94a3b8]">Gói VIP hiện tại:</span>
+                      <span className={detailModalUser.isVip ? 'text-[#fbbf24] font-bold' : 'text-[#94a3b8]'}>
+                        {detailModalUser.vipPlanName}
+                        {detailModalUser.isVip && detailModalUser.vipDaysRemaining !== null ? ` (còn ${detailModalUser.vipDaysRemaining} ngày)` : ''}
+                      </span>
+                    </div>
+                    {detailModalUser.status === 'BLOCKED' && (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-[#94a3b8]">Hạn khóa:</span>
+                          <span className="text-[#ffb4ab]">
+                            {detailModalUser.blockedUntil ? formatDateTime(detailModalUser.blockedUntil) : 'Vĩnh viễn'}
+                          </span>
+                        </div>
+                        {detailModalUser.blockReason && (
+                          <div className="flex justify-between gap-2">
+                            <span className="text-[#94a3b8] shrink-0">Lý do khóa:</span>
+                            <span className="text-[#ffb4ab] text-right">{detailModalUser.blockReason}</span>
+                          </div>
+                        )}
+                      </>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-[#94a3b8]">Ngày tham gia:</span>
+                      <span className="text-white">{formatDateTime(detailModalUser.createdAt)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#94a3b8]">Đăng nhập lần cuối:</span>
+                      <span className="text-white">{formatDateTime(detailModalUser.lastLoginAt)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {detailTab === 'posts' && (
+                <div className="space-y-2">
+                  {drilldownLoading && !drilldownData ? (
+                    <div className="text-center py-6 text-[#94a3b8]">Đang tải danh sách bài viết...</div>
+                  ) : !drilldownData?.recentPosts?.length ? (
+                    <div className="text-center py-6 text-[#94a3b8] bg-[#121221] rounded-lg border border-white/5">
+                      Người dùng này chưa đồng bộ hoặc phân tích bài viết nào.
+                    </div>
+                  ) : (
+                    drilldownData.recentPosts.map((post) => {
+                      const toxBadge = post.toxicPercentage >= 35
+                        ? 'bg-[#93000a]/30 text-[#ffb4ab] border-[#ffb4ab]/30'
+                        : post.toxicPercentage > 0
+                          ? 'bg-[#f59e0b]/15 text-[#fbbf24] border-[#f59e0b]/30'
+                          : 'bg-[#4edea3]/15 text-[#4edea3] border-[#4edea3]/30';
+                      return (
+                        <div key={post.threadsPostId} className="bg-[#121221] border border-white/10 rounded-lg p-2.5 space-y-1.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-[11px] text-white line-clamp-2 flex-1">
+                              {post.text || <span className="italic text-[#64748b]">(Bài viết không có nội dung chữ)</span>}
+                            </p>
+                            {post.permalink && (
+                              <a
+                                href={post.permalink}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[#4cd7f6] hover:text-white p-1 shrink-0"
+                                title="Mở bài viết trên Threads"
+                              >
+                                <ExternalLink size={12} />
+                              </a>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center justify-between gap-1.5 text-[9px] font-['JetBrains_Mono']">
+                            <div className="flex items-center space-x-1.5">
+                              <span className={`px-1.5 py-0.5 rounded border ${post.analyzed ? toxBadge : 'bg-white/5 text-[#94a3b8] border-white/10'}`}>
+                                {post.analyzed ? `Toxic ${post.toxicPercentage}% (${post.toxicCount}/${post.analyzedComments})` : 'Chưa phân tích'}
+                              </span>
+                              {post.analyzed && (
+                                <span className="text-[#94a3b8]">
+                                  Pos:{post.positiveCount} • Neu:{post.neutralCount} • Neg:{post.negativeCount}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[#64748b]">
+                              {formatDateTime(post.analyzedAt || post.createdAt)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              {detailTab === 'vip' && (
+                <div className="space-y-3">
+                  {drilldownLoading && !drilldownData ? (
+                    <div className="text-center py-6 text-[#94a3b8]">Đang tải lịch sử VIP & thanh toán...</div>
+                  ) : (
+                    <>
+                      <div className="space-y-1.5">
+                        <div className="text-[10px] font-semibold uppercase tracking-wider text-[#94a3b8]">
+                          Lịch sử đăng ký / cấp VIP ({drilldownData?.subscriptions?.length || 0})
+                        </div>
+                        {!drilldownData?.subscriptions?.length ? (
+                          <div className="text-center py-3 text-[#94a3b8] bg-[#121221] rounded-lg border border-white/5 text-[10px]">
+                            Chưa có lịch sử gói VIP.
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {drilldownData.subscriptions.map((sub) => (
+                              <div key={sub.id} className="bg-[#121221] border border-white/10 rounded-lg p-2 flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="text-[11px] font-semibold text-white truncate">
+                                    {sub.planName}
+                                  </div>
+                                  <div className="text-[9px] text-[#94a3b8] font-['JetBrains_Mono']">
+                                    {formatDateTime(sub.startAt)} → {formatDateTime(sub.endAt)}
+                                  </div>
+                                </div>
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${
+                                  sub.status === 'ACTIVE'
+                                    ? 'bg-[#4edea3]/15 text-[#4edea3]'
+                                    : sub.status === 'CANCELLED'
+                                      ? 'bg-[#fb7185]/15 text-[#fda4af]'
+                                      : 'bg-white/10 text-[#94a3b8]'
+                                }`}>
+                                  {sub.status}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="text-[10px] font-semibold uppercase tracking-wider text-[#94a3b8]">
+                          Giao dịch thanh toán ({drilldownData?.payments?.length || 0})
+                        </div>
+                        {!drilldownData?.payments?.length ? (
+                          <div className="text-center py-3 text-[#94a3b8] bg-[#121221] rounded-lg border border-white/5 text-[10px]">
+                            Chưa có giao dịch thanh toán nào.
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {drilldownData.payments.map((pay) => (
+                              <div key={pay.id} className="bg-[#121221] border border-white/10 rounded-lg p-2 flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="text-[10px] font-['JetBrains_Mono'] text-[#4cd7f6] truncate">
+                                    #{pay.orderCode} • {pay.paymentProvider}
+                                  </div>
+                                  <div className="text-[9px] text-[#94a3b8]">
+                                    {formatDateTime(pay.paidAt || pay.createdAt)}
+                                  </div>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <div className="text-[11px] font-bold text-[#fbbf24] font-['JetBrains_Mono']">
+                                    {Number(pay.amount || 0).toLocaleString('vi-VN')} {pay.currency || 'VND'}
+                                  </div>
+                                  <span className={`text-[9px] font-semibold ${
+                                    pay.status === 'SUCCESS' ? 'text-[#4edea3]' : pay.status === 'PENDING' ? 'text-[#fbbf24]' : 'text-[#ffb4ab]'
+                                  }`}>
+                                    {pay.status}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {detailTab === 'logs' && (
+                <div className="space-y-1.5">
+                  {drilldownLoading && !drilldownData ? (
+                    <div className="text-center py-6 text-[#94a3b8]">Đang tải nhật ký tác động...</div>
+                  ) : !drilldownData?.auditLogs?.length ? (
+                    <div className="text-center py-6 text-[#94a3b8] bg-[#121221] rounded-lg border border-white/5">
+                      Chưa ghi nhận thao tác quản trị nào lên người dùng này.
+                    </div>
+                  ) : (
+                    drilldownData.auditLogs.map((logItem) => (
+                      <div key={logItem.id} className="bg-[#121221] border border-white/10 rounded-lg p-2.5 space-y-1">
+                        <div className="flex items-center justify-between text-[9px] font-['JetBrains_Mono']">
+                          <span className="px-1.5 py-0.5 rounded bg-[#c0c1ff]/15 text-[#c0c1ff] font-bold">
+                            {logItem.action}
+                          </span>
+                          <span className="text-[#64748b]">
+                            bởi {logItem.adminUsername} • {formatDateTime(logItem.createdAt)}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-[#e2e8f0]">{logItem.description}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Footer Quick Actions */}
+            <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-white/10 bg-[#141424] shrink-0">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => handleOpenGrantVipModal(detailModalUser)}
                   disabled={actionLoadingId === detailModalUser.id}
-                  className="px-2.5 py-1.5 rounded-lg bg-[#f59e0b]/20 hover:bg-[#f59e0b]/30 text-[#fbbf24] border border-[#f59e0b]/30 text-[11px] font-medium transition flex items-center space-x-1 disabled:opacity-50"
+                  className="px-2.5 py-1.5 rounded-lg bg-[#f59e0b]/20 hover:bg-[#f59e0b]/30 text-[#fbbf24] border border-[#f59e0b]/30 text-[10px] font-medium transition flex items-center space-x-1 disabled:opacity-50"
                 >
-                  <Crown size={12} />
+                  <Crown size={11} />
                   <span>{detailModalUser.isVip ? 'Đổi / Gia hạn VIP' : 'Cấp VIP'}</span>
                 </button>
                 {detailModalUser.isVip && (
@@ -760,17 +1104,38 @@ export default function AdminUsersPage() {
                     type="button"
                     onClick={() => handleRevokeVip(detailModalUser)}
                     disabled={actionLoadingId === detailModalUser.id}
-                    className="px-2.5 py-1.5 rounded-lg bg-[#fb7185]/15 hover:bg-[#fb7185]/25 text-[#fda4af] border border-[#fb7185]/30 text-[11px] font-medium transition flex items-center space-x-1 disabled:opacity-50"
+                    className="px-2.5 py-1.5 rounded-lg bg-[#fb7185]/15 hover:bg-[#fb7185]/25 text-[#fda4af] border border-[#fb7185]/30 text-[10px] font-medium transition flex items-center space-x-1 disabled:opacity-50"
                   >
-                    <ShieldOff size={12} />
+                    <ShieldOff size={11} />
                     <span>{actionLoadingId === detailModalUser.id ? '...' : 'Thu hồi VIP'}</span>
+                  </button>
+                )}
+                {detailModalUser.status === 'BLOCKED' ? (
+                  <button
+                    type="button"
+                    onClick={() => handleUnlock(detailModalUser.id)}
+                    disabled={actionLoadingId === detailModalUser.id}
+                    className="px-2.5 py-1.5 rounded-lg bg-[#4edea3]/15 hover:bg-[#4edea3]/25 text-[#4edea3] border border-[#4edea3]/30 text-[10px] font-medium transition flex items-center space-x-1 disabled:opacity-50"
+                  >
+                    <Unlock size={11} />
+                    <span>Mở khóa</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenLockModal(detailModalUser)}
+                    disabled={actionLoadingId === detailModalUser.id}
+                    className="px-2.5 py-1.5 rounded-lg bg-[#93000a]/25 hover:bg-[#93000a]/45 text-[#ffb4ab] border border-[#ffb4ab]/25 text-[10px] font-medium transition flex items-center space-x-1 disabled:opacity-50"
+                  >
+                    <Lock size={11} />
+                    <span>Khóa</span>
                   </button>
                 )}
               </div>
               <button
                 type="button"
                 onClick={() => setDetailModalUser(null)}
-                className="px-3 py-1.5 rounded-lg bg-[#282a30] hover:bg-[#33343b] text-[#cbd5e1] text-[11px] font-medium transition"
+                className="px-3 py-1.5 rounded-lg bg-[#282a30] hover:bg-[#33343b] text-[#cbd5e1] text-[10px] font-medium transition"
               >
                 Đóng
               </button>
@@ -781,7 +1146,7 @@ export default function AdminUsersPage() {
 
       {/* Grant VIP Modal */}
       {grantVipModalUser && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#181829] border border-[#f59e0b]/30 rounded-xl w-full max-w-xs p-4 shadow-2xl space-y-3">
             <div className="flex items-center justify-between border-b border-white/10 pb-2">
               <div className="flex items-center space-x-1.5 text-[#fbbf24] font-bold text-[13px]">

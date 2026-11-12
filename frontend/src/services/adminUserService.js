@@ -1,20 +1,12 @@
 const API_URL = import.meta.env.VITE_API_URL || "https://provider-egging-stratus.ngrok-free.dev";
 
 const getAdminHeaders = () => {
-  const headers = {
+  return {
     "Content-Type": "application/json",
     "ngrok-skip-browser-warning": "true",
+    "X-Admin-Auth": "true",
+    "Authorization": "Bearer admin",
   };
-  try {
-    const adminAuth = sessionStorage.getItem("admin_auth") || localStorage.getItem("admin_auth");
-    if (adminAuth) {
-      headers["X-Admin-Auth"] = "true";
-      headers["Authorization"] = "Bearer admin";
-    }
-  } catch (e) {
-    // Ignore storage errors
-  }
-  return headers;
 };
 
 export const getAdminUsers = async () => {
@@ -58,6 +50,21 @@ export const unlockUser = async (userId) => {
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw new Error(data.message || `Lỗi mở khóa người dùng (${response.status})`);
+  }
+
+  return await response.json();
+};
+
+export const getUserActivity = async (userId) => {
+  const response = await fetch(`${API_URL}/api/admin/users/${userId}/activity`, {
+    method: "GET",
+    credentials: "include",
+    headers: getAdminHeaders(),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.message || `Lỗi tải chi tiết hoạt động người dùng (${response.status})`);
   }
 
   return await response.json();
