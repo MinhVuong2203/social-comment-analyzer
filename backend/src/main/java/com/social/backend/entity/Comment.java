@@ -39,6 +39,9 @@ public class Comment {
     @Column(name = "username")
     private String username;
 
+    @Column(name = "profile_picture_url", length = 1024)
+    private String profilePictureUrl;
+
     @Column(name = "text", columnDefinition = "TEXT")
     private String text;
 
