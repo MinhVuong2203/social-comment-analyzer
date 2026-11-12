@@ -61,6 +61,20 @@ export default function AdminUsersPage() {
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [customDurationDays, setCustomDurationDays] = useState('');
 
+  // Custom Confirm Popup & Toast Notification (replace browser alert/confirm)
+  const [confirmDialog, setConfirmDialog] = useState(null); // { type: 'UNLOCK' | 'REVOKE_VIP', user }
+  const [toast, setToast] = useState(null); // { type: 'success' | 'error', message }
+
+  const showToast = (type, message) => {
+    setToast({ type, message });
+  };
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
   const fetchUsersList = async () => {
     setLoading(true);
     setError(null);
@@ -118,6 +132,7 @@ export default function AdminUsersPage() {
   const handleConfirmLock = async () => {
     if (!lockModalUser) return;
     const targetId = lockModalUser.id;
+    const targetName = lockModalUser.username || lockModalUser.name || `#${targetId}`;
     setActionLoadingId(targetId);
     try {
       await lockUser(targetId, lockDuration, lockReason);
@@ -126,27 +141,17 @@ export default function AdminUsersPage() {
       if (detailModalUser?.id === targetId) {
         fetchUserDrilldown(targetId);
       }
+      showToast('success', `Đã khóa tài khoản @${targetName}.`);
     } catch (err) {
-      alert(err.message || 'Lỗi khi khóa tài khoản');
+      showToast('error', err.message || 'Lỗi khi khóa tài khoản');
     } finally {
       setActionLoadingId(null);
     }
   };
 
-  const handleUnlock = async (userId) => {
-    if (!window.confirm('Bạn có chắc chắn muốn mở khóa tài khoản này?')) return;
-    setActionLoadingId(userId);
-    try {
-      await unlockUser(userId);
-      await fetchUsersList();
-      if (detailModalUser?.id === userId) {
-        fetchUserDrilldown(userId);
-      }
-    } catch (err) {
-      alert(err.message || 'Lỗi khi mở khóa tài khoản');
-    } finally {
-      setActionLoadingId(null);
-    }
+  const handleUnlock = (user) => {
+    if (!user) return;
+    setConfirmDialog({ type: 'UNLOCK', user });
   };
 
   const handleOpenGrantVipModal = (user) => {
@@ -189,13 +194,14 @@ export default function AdminUsersPage() {
     if (customDurationDays.trim() !== '') {
       const parsed = Number(customDurationDays.trim());
       if (!Number.isInteger(parsed) || parsed <= 0) {
-        alert('Số ngày hiệu lực tùy chỉnh phải là số nguyên dương.');
+        showToast('error', 'Số ngày hiệu lực tùy chỉnh phải là số nguyên dương.');
         return;
       }
       customDays = parsed;
     }
 
     const targetId = grantVipModalUser.id;
+    const targetName = grantVipModalUser.username || grantVipModalUser.name || `#${targetId}`;
     setActionLoadingId(targetId);
     try {
       await manualGrantSubscription({
@@ -209,29 +215,40 @@ export default function AdminUsersPage() {
       if (detailModalUser?.id === targetId) {
         fetchUserDrilldown(targetId);
       }
+      showToast('success', `Đã cấp quyền VIP cho @${targetName}.`);
     } catch (err) {
-      alert(err.message || 'Lỗi khi cấp quyền VIP');
+      showToast('error', err.message || 'Lỗi khi cấp quyền VIP');
     } finally {
       setActionLoadingId(null);
     }
   };
 
-  const handleRevokeVip = async (user) => {
+  const handleRevokeVip = (user) => {
     if (!user) return;
-    const confirmed = window.confirm(
-      `Bạn có chắc chắn muốn thu hồi quyền VIP (${user.vipPlanName}) của @${user.username || user.id}? Tài khoản sẽ quay về gói Free ngay lập tức.`
-    );
-    if (!confirmed) return;
+    setConfirmDialog({ type: 'REVOKE_VIP', user });
+  };
+
+  const handleExecuteConfirmDialog = async () => {
+    if (!confirmDialog?.user) return;
+    const { type, user } = confirmDialog;
+    const targetName = user.username || user.name || `#${user.id}`;
 
     setActionLoadingId(user.id);
     try {
-      await revokeUserVip(user.id);
+      if (type === 'UNLOCK') {
+        await unlockUser(user.id);
+        showToast('success', `Đã mở khóa tài khoản @${targetName}.`);
+      } else if (type === 'REVOKE_VIP') {
+        await revokeUserVip(user.id);
+        showToast('success', `Đã thu hồi quyền VIP của @${targetName}.`);
+      }
+      setConfirmDialog(null);
       await fetchUsersList();
       if (detailModalUser?.id === user.id) {
         fetchUserDrilldown(user.id);
       }
     } catch (err) {
-      alert(err.message || 'Lỗi khi thu hồi quyền VIP');
+      showToast('error', err.message || 'Thao tác thất bại, vui lòng thử lại.');
     } finally {
       setActionLoadingId(null);
     }
@@ -601,7 +618,7 @@ export default function AdminUsersPage() {
 
                     {isBlocked ? (
                       <button 
-                        onClick={() => handleUnlock(u.id)}
+                        onClick={() => handleUnlock(u)}
                         disabled={isLoadingAction}
                         className="px-2.5 py-1 bg-[#4edea3]/20 hover:bg-[#4edea3]/30 text-[#4edea3] border border-[#4edea3]/30 rounded text-[10px] transition font-medium flex items-center justify-center space-x-1 disabled:opacity-50"
                       >
@@ -1113,7 +1130,7 @@ export default function AdminUsersPage() {
                 {detailModalUser.status === 'BLOCKED' ? (
                   <button
                     type="button"
-                    onClick={() => handleUnlock(detailModalUser.id)}
+                    onClick={() => handleUnlock(detailModalUser)}
                     disabled={actionLoadingId === detailModalUser.id}
                     className="px-2.5 py-1.5 rounded-lg bg-[#4edea3]/15 hover:bg-[#4edea3]/25 text-[#4edea3] border border-[#4edea3]/30 text-[10px] font-medium transition flex items-center space-x-1 disabled:opacity-50"
                   >
@@ -1275,6 +1292,125 @@ export default function AdminUsersPage() {
                 {actionLoadingId === grantVipModalUser.id ? 'Đang cấp...' : 'Xác nhận cấp VIP'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Confirmation Popup */}
+      {confirmDialog && (
+        <div className="fixed inset-0 z-[70] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+          <div className={`bg-[#181829] rounded-xl w-full max-w-xs p-4 shadow-2xl space-y-3 border ${
+            confirmDialog.type === 'UNLOCK' ? 'border-[#4edea3]/30' : 'border-[#fb7185]/35'
+          }`}>
+            <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+              <div className={`flex items-center space-x-2 font-bold text-[13px] ${
+                confirmDialog.type === 'UNLOCK' ? 'text-[#4edea3]' : 'text-[#fda4af]'
+              }`}>
+                {confirmDialog.type === 'UNLOCK' ? <Unlock size={15} /> : <ShieldOff size={15} />}
+                <span>
+                  {confirmDialog.type === 'UNLOCK' ? 'Xác nhận mở khóa' : 'Xác nhận thu hồi VIP'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConfirmDialog(null)}
+                disabled={actionLoadingId === confirmDialog.user.id}
+                className="text-[#94a3b8] hover:text-white transition p-0.5 disabled:opacity-50"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              <div className="bg-[#121221] border border-white/5 rounded-lg p-2.5 flex items-center space-x-2.5">
+                {confirmDialog.user.profilePictureUrl ? (
+                  <img
+                    src={confirmDialog.user.profilePictureUrl}
+                    alt=""
+                    className="w-8 h-8 rounded-full border border-white/15 shrink-0"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-[#252542] flex items-center justify-center text-xs font-bold text-[#c0c1ff] shrink-0">
+                    {(confirmDialog.user.name || confirmDialog.user.username || 'U').charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold text-white truncate">
+                    {confirmDialog.user.name || 'Người dùng'}
+                  </div>
+                  <div className="text-[10px] text-[#4cd7f6] font-['JetBrains_Mono'] truncate">
+                    @{confirmDialog.user.username || confirmDialog.user.id}
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-[#cbd5e1] leading-relaxed">
+                {confirmDialog.type === 'UNLOCK' ? (
+                  <>
+                    Bạn có chắc chắn muốn <span className="text-[#4edea3] font-semibold">mở khóa</span> tài khoản này? Người dùng sẽ có thể đăng nhập và sử dụng lại hệ thống ngay lập tức.
+                  </>
+                ) : (
+                  <>
+                    Bạn có chắc chắn muốn thu hồi gói <span className="text-[#fbbf24] font-semibold">{confirmDialog.user.vipPlanName}</span> của tài khoản này? Quyền lợi sẽ chuyển về <span className="text-white font-medium">Gói Free</span> ngay lập tức.
+                  </>
+                )}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setConfirmDialog(null)}
+                disabled={actionLoadingId === confirmDialog.user.id}
+                className="px-3 py-1.5 rounded-lg bg-[#282a30] hover:bg-[#33343b] text-[#cbd5e1] text-[11px] font-medium transition disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteConfirmDialog}
+                disabled={actionLoadingId === confirmDialog.user.id}
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition flex items-center space-x-1 disabled:opacity-50 ${
+                  confirmDialog.type === 'UNLOCK'
+                    ? 'bg-[#4edea3] hover:bg-[#34d399] text-[#0c1f17]'
+                    : 'bg-[#e11d48] hover:bg-[#be123c] text-white'
+                }`}
+              >
+                {confirmDialog.type === 'UNLOCK' ? <Unlock size={12} /> : <ShieldOff size={12} />}
+                <span>
+                  {actionLoadingId === confirmDialog.user.id
+                    ? 'Đang xử lý...'
+                    : confirmDialog.type === 'UNLOCK'
+                      ? 'Xác nhận mở khóa'
+                      : 'Xác nhận thu hồi'}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-4 right-4 z-[80] max-w-xs animate-fadeIn">
+          <div className={`flex items-center space-x-2 px-3 py-2 rounded-xl border shadow-2xl backdrop-blur-md text-[11px] font-medium ${
+            toast.type === 'success'
+              ? 'bg-[#122620]/95 border-[#4edea3]/40 text-[#4edea3]'
+              : 'bg-[#2a1218]/95 border-[#ffb4ab]/40 text-[#ffb4ab]'
+          }`}>
+            {toast.type === 'success' ? (
+              <CheckCircle2 size={14} className="shrink-0" />
+            ) : (
+              <AlertTriangle size={14} className="shrink-0" />
+            )}
+            <span className="flex-1 text-white/95">{toast.message}</span>
+            <button
+              type="button"
+              onClick={() => setToast(null)}
+              className="text-white/60 hover:text-white p-0.5 shrink-0"
+            >
+              <X size={12} />
+            </button>
           </div>
         </div>
       )}
