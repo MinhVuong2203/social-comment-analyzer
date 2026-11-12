@@ -9,11 +9,12 @@ export default function ThreadInfoCard({
   onSelectPost, 
   onScan, 
   scanning = false,
-  username = "threads_user"
+  username = "threads_user",
+  canScan = true
 }) {
   const [page, setPage] = useState(1);
 
-  const displayPosts = posts.length > 0 ? posts : [];
+  const displayPosts = posts || [];
   const totalPages = Math.max(1, Math.ceil(displayPosts.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const paginated = displayPosts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -36,18 +37,15 @@ export default function ThreadInfoCard({
 
   return (
     <div className="tic-wrap">
-
-      {/* ── List header ── */}
       <div className="tic-list-header">
         <span className="tic-list-title">📋 Danh sách bài viết</span>
         <span className="tic-list-count">{displayPosts.length} bài</span>
       </div>
 
-      {/* ── Post list ── */}
       <div className="tic-list">
         {displayPosts.length === 0 ? (
           <div style={{ padding: '16px 8px', textAlign: 'center', color: 'var(--text-muted)' }}>
-            Chưa có bài viết nào được tải. Nhấn quét bên dưới để đồng bộ bài viết từ Threads.
+            Chưa có bài viết nào được tải.
           </div>
         ) : (
           paginated.map((post) => {
@@ -76,7 +74,9 @@ export default function ThreadInfoCard({
                         Đã phân tích
                       </span>
                     ) : (
-                      <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Chưa phân tích</span>
+                      <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>
+                        Chưa phân tích
+                      </span>
                     )}
                     {isSelected && (
                       <span className="tic-selected-badge">✓ Đang chọn</span>
@@ -111,7 +111,6 @@ export default function ThreadInfoCard({
         )}
       </div>
 
-      {/* ── Pagination ── */}
       {totalPages > 1 && (
         <div className="tic-pagination">
           <button
@@ -144,16 +143,15 @@ export default function ThreadInfoCard({
         </div>
       )}
 
-      {/* ── Scan button ── */}
       <button 
         className="tic-scan-btn" 
         onClick={onScan} 
-        disabled={scanning}
-        style={{ opacity: scanning ? 0.7 : 1, cursor: scanning ? 'not-allowed' : 'pointer' }}
+        disabled={scanning || !canScan}
+        style={{ opacity: (scanning || !canScan) ? 0.6 : 1, cursor: (scanning || !canScan) ? 'not-allowed' : 'pointer' }}
+        title={!canScan ? 'Bạn đã hết lượt phân tích hôm nay. Nâng cấp VIP để phân tích không giới hạn.' : undefined}
       >
-        {scanning ? '⏳ Đang phân tích AI & Lưu Database...' : '↻ Quét & Phân tích bài viết đã chọn'}
+        {scanning ? 'Đang phân tích...' : !canScan ? 'Hết lượt phân tích hôm nay' : 'Quét & Phân tích bài viết'}
       </button>
-
     </div>
   );
 }

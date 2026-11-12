@@ -76,10 +76,13 @@ public class AnalysisService {
                         String username = item.path("username").asText("threads_user");
                         String text = item.path("text").asText("");
                         String timestamp = item.path("timestamp").asText("");
+                        String profilePictureUrl = item.has("profile_picture_url") && !item.get("profile_picture_url").isNull()
+                                ? item.path("profile_picture_url").asText(null)
+                                : null;
 
                         // Xử lý quan hệ phân cấp cha-con (replied_to)
                         String parentId = null;
-                        boolean isReply = item.path("is_reply").asBoolean(false);
+                        boolean isReply = false;
 
                         if (item.has("replied_to") && !item.get("replied_to").isNull()) {
                             JsonNode repliedToNode = item.get("replied_to");
@@ -105,11 +108,15 @@ public class AnalysisService {
                                         .username(username)
                                         .text(text)
                                         .threadsTimestamp(timestamp)
+                                        .profilePictureUrl(profilePictureUrl)
                                         .build());
 
                         comment.setParentId(parentId);
                         comment.setIsReply(isReply);
                         comment.setText(text);
+                        if (profilePictureUrl != null && !profilePictureUrl.isBlank()) {
+                            comment.setProfilePictureUrl(profilePictureUrl);
+                        }
                         comment = commentRepository.save(comment);
                         commentsToAnalyze.add(comment);
                     }
@@ -207,7 +214,8 @@ public class AnalysisService {
                     new CommentAnalysisDto.TaskSummary(hateLabel, hateConf),
                     new CommentAnalysisDto.TaskSummary(sentLabel, sentConf),
                     c.getParentId(),
-                    c.getIsReply() != null ? c.getIsReply() : false
+                    c.getIsReply() != null ? c.getIsReply() : false,
+                    c.getProfilePictureUrl()
             ));
         }
 
@@ -264,11 +272,12 @@ public class AnalysisService {
                         c.getText(),
                         c.getUsername(),
                         c.getThreadsTimestamp(),
-                        p != null ? new CommentAnalysisDto.TaskSummary(p.getToxicityLabel(), p.getToxicityConfidence()) : null,
-                        p != null ? new CommentAnalysisDto.TaskSummary(p.getHateSpeechLabel(), p.getHateSpeechConfidence()) : null,
-                        p != null ? new CommentAnalysisDto.TaskSummary(p.getSentimentLabel(), p.getSentimentConfidence()) : null,
+                        p != null ? new CommentAnalysisDto.TaskSummary(p.getToxicityLabel(), p.getToxicityConfidence() != null ? p.getToxicityConfidence() : 0.0) : null,
+                        p != null ? new CommentAnalysisDto.TaskSummary(p.getHateSpeechLabel(), p.getHateSpeechConfidence() != null ? p.getHateSpeechConfidence() : 0.0) : null,
+                        p != null ? new CommentAnalysisDto.TaskSummary(p.getSentimentLabel(), p.getSentimentConfidence() != null ? p.getSentimentConfidence() : 0.0) : null,
                         c.getParentId(),
-                        c.getIsReply() != null ? c.getIsReply() : false
+                        c.getIsReply() != null ? c.getIsReply() : false,
+                        c.getProfilePictureUrl()
                 );
             }).toList();
 

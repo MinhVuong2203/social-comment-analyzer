@@ -124,6 +124,24 @@ public class AdminController {
     }
 
     /**
+     * Xem sâu chi tiết hoạt động của 1 người dùng (User Drill-down)
+     * GET /api/admin/users/{id}/activity
+     */
+    @GetMapping("/users/{id}/activity")
+    public ResponseEntity<AdminDto.UserActivityDrilldown> getUserActivity(
+            @PathVariable Long id,
+            HttpServletRequest request,
+            HttpSession session
+    ) {
+        validateAdmin(request, session);
+        try {
+            return ResponseEntity.ok(userService.getUserActivityDrilldown(id));
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        }
+    }
+
+    /**
      * Khóa tài khoản người dùng với các option thời hạn (1 ngày, 7 ngày, 30 ngày, vĩnh viễn)
      * POST /api/admin/users/{id}/lock
      */

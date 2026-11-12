@@ -5,7 +5,76 @@ import { apiService } from '../services/apiService';
 import { useAuth } from '../context/AuthContext';
 import '../assets/styles/Comment.css';
 
-const SORT_OPTIONS = ['Newest', 'Most Toxic', 'Positive', 'Negative'];
+const SORT_OPTIONS = ['Newest', 'Oldest', 'Most Toxic', 'Positive', 'Negative'];
+const SORT_LABELS = {
+  'Newest': 'Mới nhất',
+  'Oldest': 'Cũ nhất',
+  'Most Toxic': 'Độc hại nhất',
+  'Positive': 'Tích cực nhất',
+  'Negative': 'Tiêu cực nhất',
+};
+
+// ── Định dạng khoảng thời gian bình luận (relative time: "X phút trước", "Hôm qua lúc...") ──
+export function formatCommentTime(rawTimestamp) {
+  if (!rawTimestamp) return 'Gần đây';
+  const date = new Date(rawTimestamp);
+  if (isNaN(date.getTime())) return String(rawTimestamp);
+
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  if (diffMs < 0) {
+    return date.toLocaleString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  if (diffSec < 60) return 'Vừa xong';
+  if (diffMin < 60) return `${diffMin} phút trước`;
+  if (diffHour < 24) return `${diffHour} giờ trước`;
+  if (diffDay === 1) return `Hôm qua lúc ${date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+  if (diffDay < 7) return `${diffDay} ngày trước`;
+
+  return date.toLocaleString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+// ── Lấy mốc thời gian dạng số (timestamp epoch ms) chuẩn xác để sắp xếp ──
+export function getCommentTimestamp(item) {
+  if (!item) return 0;
+  const raw = item.timestamp || item.threadsTimestamp || item.createdAt;
+  if (raw) {
+    const t = new Date(raw).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  if (item.time && typeof item.time === 'string') {
+    const t = new Date(item.time).getTime();
+    if (!isNaN(t) && t > 0) return t;
+
+    const minMatch = item.time.match(/(\d+)\s*phút/);
+    if (minMatch) return Date.now() - parseInt(minMatch[1], 10) * 60 * 1000;
+    const hourMatch = item.time.match(/(\d+)\s*giờ/);
+    if (hourMatch) return Date.now() - parseInt(hourMatch[1], 10) * 3600 * 1000;
+    const dayMatch = item.time.match(/(\d+)\s*ngày/);
+    if (dayMatch) return Date.now() - parseInt(dayMatch[1], 10) * 86400 * 1000;
+  }
+  const n = Number(item.id);
+  if (!isNaN(n)) return n;
+  return 0;
+}
 
 export default function CommentsPage() {
   const { user } = useAuth();
@@ -103,7 +172,12 @@ export default function CommentsPage() {
                 isReply: Boolean(c.isReply || c.parentId),
                 replyToUser: c.replyToUser || null,
                 username: `@${c.username || 'threads_user'}`,
-                time: c.timestamp ? new Date(c.timestamp).toLocaleString('vi-VN') : 'Gần đây',
+                avatar: c.profile_picture_url || c.profilePictureUrl || null,
+                profilePicture: c.profile_picture_url || c.profilePictureUrl || null,
+                profile_picture_url: c.profile_picture_url || c.profilePictureUrl || null,
+                time: formatCommentTime(c.timestamp),
+                timestamp: c.timestamp || null,
+                formattedTime: c.timestamp ? new Date(c.timestamp).toLocaleString('vi-VN') : 'Gần đây',
                 content: c.text,
                 sentiment: hasPrediction ? sentLabel : 'unprocessed',
                 sentimentScore: hasPrediction ? sentConf : 0,
@@ -144,32 +218,71 @@ export default function CommentsPage() {
     return posts.find(p => String(p.id) === String(selectedPostId)) || posts[0];
   }, [posts, selectedPostId]);
 
-  // ── Xây dựng cấu trúc cây phân cấp (Top-level comments & Child replies) ──
-  const { topLevelItems, childMap, totalTopLevel, totalChildReplies } = useMemo(() => {
-    const childMap = new Map();
-    const topLevel = [];
-    const allIds = new Set(replies.map(r => String(r.id)));
+  // ── Xây dựng cấu trúc cây phân cấp (Top-level comments & All nested child replies) ──
+  const { topLevelItems, totalTopLevel, totalChildReplies } = useMemo(() => {
+    if (!replies || replies.length === 0) {
+      return { topLevelItems: [], totalTopLevel: 0, totalChildReplies: 0 };
+    }
 
+    // 1. Tạo node clone cho mỗi reply với mảng children rỗng
+    const itemMap = new Map();
     replies.forEach(r => {
-      const pId = r.parentId ? String(r.parentId) : null;
-      if (pId && allIds.has(pId)) {
-        if (!childMap.has(pId)) childMap.set(pId, []);
-        childMap.get(pId).push(r);
+      const idStr = String(r.id).trim();
+      itemMap.set(idStr, {
+        ...r,
+        children: [],
+      });
+    });
+
+    // 2. Kết nối cha - con cho mọi cấp độ (cấp 1, reply cấp 2, reply của reply cấp 3...)
+    const roots = [];
+    const rootPostIdStr = selectedPostId ? String(selectedPostId).trim() : null;
+
+    itemMap.forEach(item => {
+      const pId = item.parentId ? String(item.parentId).trim() : null;
+      const isParentInList = pId && itemMap.has(pId);
+      const isReplyToRootPost = !pId || (rootPostIdStr && pId === rootPostIdStr);
+
+      if (isParentInList && !isReplyToRootPost && pId !== String(item.id).trim()) {
+        const parentNode = itemMap.get(pId);
+        // Tự động gán người nhận replyToUser nếu chưa có
+        if (!item.replyToUser && parentNode.username) {
+          item.replyToUser = parentNode.username;
+        }
+        item.isReply = true;
+        parentNode.children.push(item);
       } else {
-        topLevel.push(r);
+        // Comment cấp 1 (reply bài root) hoặc các reply không tìm thấy parent ID trong danh sách (để không bị bỏ sót bất kỳ bình luận nào)
+        item.isReply = false;
+        roots.push(item);
       }
     });
 
-    const totalChild = replies.filter(r => r.isReply || r.parentId).length;
-    const totalTop = replies.length - totalChild;
+    // 3. Sắp xếp các reply con trong từng luồng theo thứ tự thời gian tăng dần (cũ nhất ở trên -> mới nhất ở dưới)
+    function sortThreadReplies(children) {
+      children.sort((a, b) => getCommentTimestamp(a) - getCommentTimestamp(b));
+      children.forEach(child => {
+        if (child.children && child.children.length > 0) {
+          sortThreadReplies(child.children);
+        }
+      });
+    }
+
+    roots.forEach(root => {
+      if (root.children && root.children.length > 0) {
+        sortThreadReplies(root.children);
+      }
+    });
+
+    const totalTop = roots.length;
+    const totalChild = replies.length - totalTop;
 
     return {
-      topLevelItems: topLevel,
-      childMap,
+      topLevelItems: roots,
       totalTopLevel: totalTop,
       totalChildReplies: totalChild,
     };
-  }, [replies]);
+  }, [replies, selectedPostId]);
 
   // ── Dynamic Filters based on real comments state ──
   const dynamicFilters = useMemo(() => {
@@ -204,46 +317,44 @@ export default function CommentsPage() {
         if (!item.analyzed || item.sentiment !== activeFilter) return false;
       }
       if (q) {
-        return item.content.toLowerCase().includes(q) || item.username.toLowerCase().includes(q);
+        const textMatch = (item.content || '').toLowerCase().includes(q);
+        const userMatch = (item.username || '').toLowerCase().includes(q);
+        return textMatch || userMatch;
       }
       return true;
     };
 
+    function hasMatchingDescendant(node) {
+      if (matchesFilter(node)) return true;
+      if (node.children && node.children.length > 0) {
+        return node.children.some(child => hasMatchingDescendant(child));
+      }
+      return false;
+    }
+
     let list = [...topLevelItems];
 
+    // Sắp xếp các comment cấp 1 (reply bài root) chuẩn xác theo mốc thời gian hoặc tiêu chí chọn
     if (sort === 'Most Toxic') {
       list.sort((a, b) => (b.toxicity || 0) - (a.toxicity || 0));
     } else if (sort === 'Positive') {
       list.sort((a, b) => (b.sentiment === 'positive' ? 1 : 0) - (a.sentiment === 'positive' ? 1 : 0));
     } else if (sort === 'Negative') {
       list.sort((a, b) => (b.sentiment === 'negative' ? 1 : 0) - (a.sentiment === 'negative' ? 1 : 0));
+    } else if (sort === 'Oldest') {
+      // Cũ nhất trước: tăng dần theo mốc thời gian bình luận
+      list.sort((a, b) => getCommentTimestamp(a) - getCommentTimestamp(b));
     } else {
-      list.sort((a, b) => b.id - a.id);
+      // 'Newest' (Mặc định): Mới nhất trước - giảm dần theo mốc thời gian bình luận
+      list.sort((a, b) => getCommentTimestamp(b) - getCommentTimestamp(a));
     }
 
     if (activeFilter === 'all' && !q) {
-      return list.map(p => ({
-        parent: p,
-        children: childMap.get(String(p.id)) || [],
-      }));
+      return list;
     }
 
-    const result = [];
-    list.forEach(p => {
-      const pMatches = matchesFilter(p);
-      const allChildren = childMap.get(String(p.id)) || [];
-      const matchingChildren = allChildren.filter(matchesFilter);
-
-      if (pMatches || matchingChildren.length > 0) {
-        result.push({
-          parent: p,
-          children: matchingChildren.length > 0 ? matchingChildren : allChildren,
-        });
-      }
-    });
-
-    return result;
-  }, [topLevelItems, childMap, activeFilter, search, sort]);
+    return list.filter(hasMatchingDescendant);
+  }, [topLevelItems, activeFilter, search, sort]);
 
   // ── Stats calculation ──
   const stats = useMemo(() => {
@@ -283,7 +394,12 @@ export default function CommentsPage() {
                 isReply: Boolean(c.isReply || c.parentId),
                 replyToUser: c.replyToUser || null,
                 username: `@${c.username || 'threads_user'}`,
-                time: c.timestamp ? new Date(c.timestamp).toLocaleString('vi-VN') : 'Gần đây',
+                avatar: c.profile_picture_url || c.profilePictureUrl || null,
+                profilePicture: c.profile_picture_url || c.profilePictureUrl || null,
+                profile_picture_url: c.profile_picture_url || c.profilePictureUrl || null,
+                time: formatCommentTime(c.timestamp),
+                timestamp: c.timestamp || null,
+                formattedTime: c.timestamp ? new Date(c.timestamp).toLocaleString('vi-VN') : 'Gần đây',
                 content: c.text,
                 sentiment: (c.sentiment?.label || 'NEUTRAL').toLowerCase(),
                 sentimentScore: sentConf,
@@ -566,7 +682,7 @@ export default function CommentsPage() {
       <div className="ct-filter-bar">
         <span className="ct-filter-label">BỘ LỌC PHÂN TÍCH</span>
         <div className="ct-sort-wrap" onClick={() => setShowSort(s => !s)}>
-          <span className="ct-sort-btn">Sắp xếp: {sort}</span>
+          <span className="ct-sort-btn">Sắp xếp: {SORT_LABELS[sort] || sort}</span>
           {showSortMenu && (
             <div className="ct-sort-menu">
               {SORT_OPTIONS.map(o => (
@@ -575,7 +691,7 @@ export default function CommentsPage() {
                   className={`ct-sort-item ${sort === o ? 'active' : ''}`}
                   onClick={() => { setSort(o); setShowSort(false); }}
                 >
-                  {o}
+                  {SORT_LABELS[o] || o}
                 </div>
               ))}
             </div>
@@ -638,13 +754,13 @@ export default function CommentsPage() {
         </div>
       ) : (
         <div className="ct-list">
-          {displayItems.map(({ parent, children }) => (
+          {displayItems.map(item => (
             <ReplyCard
-              key={parent.id}
-              reply={parent}
-              childReplies={children}
+              key={item.id}
+              reply={item}
+              childReplies={item.children || []}
               onAnalyzeSingle={handleAnalyzeSingle}
-              isAnalyzing={isAnalyzing || analyzingId === parent.id}
+              isAnalyzing={isAnalyzing || analyzingId === item.id}
               analyzingId={analyzingId}
             />
           ))}

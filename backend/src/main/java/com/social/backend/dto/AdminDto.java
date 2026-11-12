@@ -81,4 +81,81 @@ public class AdminDto {
             LocalDateTime lastCheckedAt,  // Thời điểm kiểm tra
             String message                // Diễn giải trạng thái
     ) {}
+
+    public record UserQuotaSummary(
+            boolean unlimited,
+            long todayAnalysisCount,
+            int dailyAnalyzeLimit,
+            int remainingAnalysis,
+            long todayExportCount,
+            int dailyExportLimit,
+            int remainingExports,
+            long totalPostsCount,
+            long totalAnalysisRuns,
+            long totalCommentsAnalyzed,
+            long totalToxicComments,
+            long totalHateComments,
+            double totalSpentVnd
+    ) {}
+
+    public record UserPostActivityItem(
+            String threadsPostId,
+            String text,
+            String permalink,
+            Integer totalReplies,
+            boolean analyzed,
+            LocalDateTime createdAt,
+            LocalDateTime analyzedAt,
+            int analyzedComments,
+            int toxicCount,
+            int hateCount,
+            int offensiveCount,
+            int positiveCount,
+            int neutralCount,
+            int negativeCount,
+            int toxicPercentage
+    ) {}
+
+    public record UserSubscriptionHistoryItem(
+            Long id,
+            String planCode,
+            String planName,
+            String status,
+            java.math.BigDecimal price,
+            Integer durationDays,
+            java.time.OffsetDateTime startAt,
+            java.time.OffsetDateTime endAt,
+            java.time.OffsetDateTime createdAt
+    ) {}
+
+    public record UserPaymentHistoryItem(
+            Long id,
+            String orderCode,
+            String paymentProvider,
+            String paymentMethod,
+            java.math.BigDecimal amount,
+            String currency,
+            String status,
+            java.time.OffsetDateTime paidAt,
+            java.time.OffsetDateTime createdAt
+    ) {}
+
+    public record UserAuditLogItem(
+            Long id,
+            String adminUsername,
+            String action,
+            String targetType,
+            String targetId,
+            String description,
+            LocalDateTime createdAt
+    ) {}
+
+    public record UserActivityDrilldown(
+            UserSummary user,
+            UserQuotaSummary quota,
+            java.util.List<UserPostActivityItem> recentPosts,
+            java.util.List<UserSubscriptionHistoryItem> subscriptions,
+            java.util.List<UserPaymentHistoryItem> payments,
+            java.util.List<UserAuditLogItem> auditLogs
+    ) {}
 }

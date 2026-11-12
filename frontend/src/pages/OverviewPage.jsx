@@ -2,41 +2,40 @@ import React, { useState, useEffect, useCallback } from 'react';
 import '../assets/styles/TabTongQuan.css';
 
 import ThreadInfoCard from '../components/overview/ThreadInfoCard';
-import SummaryCard    from '../components/overview/SummaryCard';
-import SentimentCard  from '../components/overview/SentimentCard';
-import ToxicityCard   from '../components/overview/ToxicityCard';
-import QuickActions   from '../components/overview/QuickActions';
+import SummaryCard from '../components/overview/SummaryCard';
+import SentimentCard from '../components/overview/SentimentCard';
+import ToxicityCard from '../components/overview/ToxicityCard';
+import QuickActions from '../components/overview/QuickActions';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/apiService';
 import { useAuth } from '../context/AuthContext';
+import { useVipStatus } from '../hooks/useVipStatus';
 
 export default function OverviewPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const vipStatus = useVipStatus();
 
   const [posts, setPosts] = useState([]);
   const [selectedPostId, setSelectedPostId] = useState(null);
   const [postAnalysis, setPostAnalysis] = useState(null);
   const [overviewStats, setOverviewStats] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // 1. Tải danh sách bài viết từ Backend (DB/Threads)
   const loadPosts = useCallback(async () => {
     try {
       setErrorMsg(null);
       const postList = await apiService.getPosts();
       setPosts(postList || []);
-      if (postList && postList.length > 0 && !selectedPostId) {
-        setSelectedPostId(postList[0].id);
+      if (postList && postList.length > 0) {
+        setSelectedPostId((prev) => prev || postList[0].id);
       }
     } catch (err) {
       console.warn("Lỗi khi tải danh sách bài viết:", err);
     }
-  }, [selectedPostId]);
+  }, []);
 
-  // 2. Tải thống kê tổng quan của User
   const loadOverview = useCallback(async () => {
     try {
       const data = await apiService.getOverview();
@@ -46,41 +45,36 @@ export default function OverviewPage() {
     }
   }, []);
 
-  // 3. Tải phân tích chi tiết của bài viết được chọn
   const loadPostAnalysis = useCallback(async (postId) => {
     if (!postId) return;
     try {
       const analysis = await apiService.getPostAnalysis(postId);
       setPostAnalysis(analysis);
     } catch {
-      // Nếu bài viết này chưa phân tích thì reset về null
       setPostAnalysis(null);
     }
   }, []);
 
-  // Khởi tạo ban đầu
   useEffect(() => {
-    let isMounted = true;
-    const init = async () => {
-      setLoading(true);
-      await Promise.all([loadPosts(), loadOverview()]);
-      if (isMounted) setLoading(false);
-    };
-    init();
-    return () => { isMounted = false; };
+    loadPosts();
+    loadOverview();
   }, [loadPosts, loadOverview]);
 
-  // Khi người dùng chọn bài viết khác
   useEffect(() => {
     if (selectedPostId) {
       loadPostAnalysis(selectedPostId);
     }
   }, [selectedPostId, loadPostAnalysis]);
 
-  // Xử lý khi bấm nút "Quét & Phân tích" bài viết
   const handleScanPost = async () => {
     if (!selectedPostId) {
       setErrorMsg("Vui lòng chọn một bài viết trước khi quét.");
+      return;
+    }
+
+    // Kiểm tra quota phía client trước (non-VIP)
+    if (!vipStatus.isVipOrAdmin && vipStatus.remainingAnalysis === 0) {
+      setErrorMsg(`Bạn đã dùng hết ${vipStatus.dailyAnalyzeLimit} lần phân tích trong ngày hôm nay. Nâng cấp VIP để phân tích không giới hạn.`);
       return;
     }
 
@@ -89,22 +83,21 @@ export default function OverviewPage() {
       setErrorMsg(null);
       const result = await apiService.analyzePost(selectedPostId);
       setPostAnalysis(result);
-
-      // Cập nhật lại danh sách bài viết và overview từ database
-      await Promise.all([loadPosts(), loadOverview()]);
+      await Promise.all([loadPosts(), loadOverview(), vipStatus.refresh()]);
     } catch (err) {
-      console.error("Lỗi khi phân tích bài viết:", err);
-      setErrorMsg(err.message || "Lỗi khi phân tích bài viết. Hãy chắc chắn AI Service và Backend đang chạy.");
+      // Xử lý lỗi 429 quota exceeded từ server
+      if (err.message && err.message.includes('429')) {
+        setErrorMsg(`Bạn đã đạt giới hạn ${vipStatus.dailyAnalyzeLimit} lần phân tích trong ngày. Nâng cấp VIP để phân tích không giới hạn.`);
+      } else {
+        setErrorMsg(err.message || "Lỗi khi phân tích bài viết. Hãy chắc chắn AI Service và Backend đang chạy.");
+      }
     } finally {
       setAnalyzing(false);
     }
   };
 
-  // Tính toán dữ liệu hiển thị cho các Card
-  // Ưu tiên hiển thị bài viết đang chọn, nếu chưa có thì lấy theo thống kê tổng quan
   const currentTotalReplies = postAnalysis?.totalComments ?? overviewStats?.totalComments ?? 0;
 
-  // Sentiment calculation
   const rawSentiment = postAnalysis?.sentiment ?? overviewStats?.sentiment ?? {};
   const posCount = rawSentiment['POSITIVE'] || 0;
   const neuCount = rawSentiment['NEUTRAL'] || 0;
@@ -127,7 +120,6 @@ export default function OverviewPage() {
     netScore: totalSent > 0 ? Math.round(((posCount - negCount) / totalSent) * 100) : 0
   };
 
-  // Toxicity calculation
   const rawToxicity = postAnalysis?.toxicity ?? overviewStats?.toxicity ?? {};
   const rawHate = postAnalysis?.hateSpeech ?? overviewStats?.hateSpeech ?? {};
 
@@ -152,15 +144,62 @@ export default function OverviewPage() {
     hateCount: hateCount
   };
 
-  // Summary card stats
   const summaryStats = {
     analyzed: currentTotalReplies,
-    phobert: 96.8, // PhoBERT v2.4 benchmark accuracy
+    phobert: 96.8,
     total: currentTotalReplies
   };
 
+  // Hiển thị quota banner cho non-VIP
+  const showQuotaBanner = !vipStatus.loading && !vipStatus.isVipOrAdmin;
+
   return (
     <div className="tab-tong-quan">
+      {/* Quota Banner */}
+      {showQuotaBanner && (
+        <div style={{
+          padding: '8px 12px',
+          background: vipStatus.remainingAnalysis === 0
+            ? 'rgba(239, 68, 68, 0.1)'
+            : 'rgba(245, 158, 11, 0.08)',
+          border: `1px solid ${vipStatus.remainingAnalysis === 0
+            ? 'rgba(239, 68, 68, 0.3)'
+            : 'rgba(245, 158, 11, 0.25)'}`,
+          borderRadius: 8,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          flexWrap: 'wrap',
+        }}>
+          <div style={{ fontSize: 10.5, color: vipStatus.remainingAnalysis === 0 ? '#f87171' : '#fbbf24' }}>
+            {vipStatus.remainingAnalysis === 0
+              ? `Hết lượt phân tích hôm nay (${vipStatus.dailyAnalyzeLimit}/${vipStatus.dailyAnalyzeLimit}).`
+              : `Lượt phân tích còn lại hôm nay: ${vipStatus.remainingAnalysis}/${vipStatus.dailyAnalyzeLimit}`}
+            {' '}
+            <span style={{ color: '#94a3b8' }}>
+              Nâng cấp VIP để phân tích không giới hạn.
+            </span>
+          </div>
+          <button
+            onClick={() => navigate('/profile')}
+            style={{
+              padding: '3px 10px',
+              background: 'rgba(255,215,0,0.12)',
+              border: '1px solid rgba(255,215,0,0.3)',
+              color: '#ffd700',
+              borderRadius: 6,
+              fontSize: 10,
+              fontWeight: 600,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Nâng cấp VIP
+          </button>
+        </div>
+      )}
+
       {errorMsg && (
         <div style={{
           padding: '8px 12px',
@@ -171,11 +210,10 @@ export default function OverviewPage() {
           fontSize: 11,
           lineHeight: 1.4
         }}>
-          ⚠️ {errorMsg}
+          {errorMsg}
         </div>
       )}
 
-      {/* 1. Danh sách bài viết & Nút Quét */}
       <ThreadInfoCard 
         posts={posts}
         selectedPostId={selectedPostId}
@@ -183,18 +221,12 @@ export default function OverviewPage() {
         onScan={handleScanPost}
         scanning={analyzing}
         username={user?.username}
+        canScan={vipStatus.isVipOrAdmin || vipStatus.remainingAnalysis > 0}
       />
 
-      {/* 2. Thống kê tiến trình AI */}
       <SummaryCard stats={summaryStats} />
-
-      {/* 3. Phân tích Cảm xúc (PhoBERT Sentiment) */}
       <SentimentCard sentiment={sentimentData} />
-
-      {/* 4. Mức độ Độc hại & Hate Speech */}
       <ToxicityCard toxicity={toxicityData} />
-
-      {/* 5. Phím tắt thao tác nhanh */}
       <QuickActions onAction={(id) => {
         if (id === 'view-replies' || id === 'filter-toxic' || id === 'deep-analysis') {
           navigate('/comments');
