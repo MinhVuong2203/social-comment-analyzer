@@ -22,7 +22,9 @@ import {
   CreditCard,
   History,
   ExternalLink,
-  Gauge
+  Gauge,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getAdminUsers, getUserActivity, lockUser, unlockUser } from '../services/adminUserService';
@@ -43,6 +45,10 @@ export default function AdminUsersPage() {
   const [vipFilter, setVipFilter] = useState('ALL'); // ALL, VIP, FREE, or specific planCode
   const [dateFilter, setDateFilter] = useState('ALL'); // ALL, TODAY, 7_DAYS, 30_DAYS
   const [sortOrder, setSortOrder] = useState('NEWEST'); // NEWEST, OLDEST
+
+  // Pagination States
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Modal State for Lock User
   const [lockModalUser, setLockModalUser] = useState(null);
@@ -294,6 +300,7 @@ export default function AdminUsersPage() {
     setVipFilter('ALL');
     setDateFilter('ALL');
     setSortOrder('NEWEST');
+    setCurrentPage(1);
   };
 
   // Logic lọc và sắp xếp người dùng
@@ -342,6 +349,26 @@ export default function AdminUsersPage() {
     return sortOrder === 'NEWEST' ? timeB - timeA : timeA - timeB;
   });
 
+  // Phân trang
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (safeCurrentPage - 1) * pageSize;
+  const paginatedUsers = filteredUsers.slice(startIndex, startIndex + pageSize);
+
+  const getPageNumbers = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    const pages = [1];
+    if (safeCurrentPage > 3) pages.push('...');
+    const start = Math.max(2, safeCurrentPage - 1);
+    const end = Math.min(totalPages - 1, safeCurrentPage + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (safeCurrentPage < totalPages - 2) pages.push('...');
+    pages.push(totalPages);
+    return pages;
+  };
+
   return (
     <div className="w-full h-full min-h-screen bg-[#13131f] text-[#f1f5f9] font-['Inter'] flex flex-col text-xs select-none">
       {/* Top Header */}
@@ -386,7 +413,7 @@ export default function AdminUsersPage() {
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
             placeholder="Tìm theo tên, @username, Threads ID, tên gói VIP..."
             className="w-full h-8 pl-8 pr-3 bg-[#1a1a2e] border border-white/10 rounded-lg text-xs text-white placeholder:text-[#94a3b8] focus:outline-none focus:border-[#4cd7f6] transition"
           />
@@ -403,7 +430,7 @@ export default function AdminUsersPage() {
             {/* Lọc Trạng Thái */}
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
               className="bg-[#121221] border border-white/10 text-white rounded px-2 py-1 text-[10px] focus:outline-none focus:border-[#4cd7f6]"
             >
               <option value="ALL">Tất cả trạng thái</option>
@@ -414,7 +441,7 @@ export default function AdminUsersPage() {
             {/* Lọc Gói VIP */}
             <select
               value={vipFilter}
-              onChange={(e) => setVipFilter(e.target.value)}
+              onChange={(e) => { setVipFilter(e.target.value); setCurrentPage(1); }}
               className="bg-[#121221] border border-white/10 text-white rounded px-2 py-1 text-[10px] focus:outline-none focus:border-[#f59e0b]"
             >
               <option value="ALL">Tất cả gói</option>
@@ -430,7 +457,7 @@ export default function AdminUsersPage() {
             {/* Lọc Ngày Tham Gia */}
             <select
               value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
+              onChange={(e) => { setDateFilter(e.target.value); setCurrentPage(1); }}
               className="bg-[#121221] border border-white/10 text-white rounded px-2 py-1 text-[10px] focus:outline-none focus:border-[#4edea3]"
             >
               <option value="ALL">Mọi ngày tham gia</option>
@@ -442,7 +469,7 @@ export default function AdminUsersPage() {
             {/* Sắp Xếp */}
             <select
               value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value)}
+              onChange={(e) => { setSortOrder(e.target.value); setCurrentPage(1); }}
               className="bg-[#121221] border border-white/10 text-white rounded px-2 py-1 text-[10px] focus:outline-none focus:border-[#c0c1ff]"
             >
               <option value="NEWEST">Mới tham gia nhất</option>
@@ -505,7 +532,7 @@ export default function AdminUsersPage() {
         {/* User List */}
         {!loading && filteredUsers.length > 0 && (
           <div className="space-y-1.5">
-            {filteredUsers.map((u) => {
+            {paginatedUsers.map((u) => {
               const isBlocked = u.status === 'BLOCKED';
               const isLoadingAction = actionLoadingId === u.id;
 
@@ -639,6 +666,71 @@ export default function AdminUsersPage() {
                 </div>
               );
             })}
+
+            {/* Thanh phân trang */}
+            <div className="bg-[#1a1a2e]/90 border border-white/10 rounded-lg px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-[10px] mt-2">
+              <div className="flex items-center space-x-2 text-[#94a3b8]">
+                <span className="font-['JetBrains_Mono']">
+                  Hiển thị <span className="text-white font-semibold">{startIndex + 1}–{Math.min(startIndex + pageSize, filteredUsers.length)}</span> / {filteredUsers.length} user
+                </span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="bg-[#121221] border border-white/10 text-white rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:border-[#4cd7f6]"
+                  title="Số user mỗi trang"
+                >
+                  {[5, 10, 20, 50].map((size) => (
+                    <option key={size} value={size}>{size} / trang</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center space-x-1">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={safeCurrentPage <= 1}
+                  className="p-1 rounded bg-[#121221] border border-white/10 text-[#cbd5e1] hover:text-white hover:border-white/25 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  title="Trang trước"
+                >
+                  <ChevronLeft size={13} />
+                </button>
+
+                {getPageNumbers().map((page, idx) =>
+                  page === '...' ? (
+                    <span key={`dots-${idx}`} className="px-1.5 text-[#64748b] font-['JetBrains_Mono']">
+                      ...
+                    </span>
+                  ) : (
+                    <button
+                      key={page}
+                      type="button"
+                      onClick={() => setCurrentPage(page)}
+                      className={`min-w-[24px] h-6 px-1.5 rounded font-['JetBrains_Mono'] text-[10px] border transition ${
+                        safeCurrentPage === page
+                          ? 'bg-[#4cd7f6]/20 text-[#4cd7f6] border-[#4cd7f6]/50 font-bold'
+                          : 'bg-[#121221] text-[#94a3b8] border-white/10 hover:text-white hover:border-white/25'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safeCurrentPage >= totalPages}
+                  className="p-1 rounded bg-[#121221] border border-white/10 text-[#cbd5e1] hover:text-white hover:border-white/25 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  title="Trang sau"
+                >
+                  <ChevronRight size={13} />
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
