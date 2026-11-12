@@ -7,6 +7,9 @@ import "./index.css";
 // import "./App.css";
 import './assets/styles/variables.css';
 
+// Khởi phục theme đã lưu từ localStorage
+const savedTheme = localStorage.getItem('app-theme') || 'dark';
+document.documentElement.setAttribute('data-theme', savedTheme);
 
 ReactDOM.createRoot(
     document.getElementById("root")

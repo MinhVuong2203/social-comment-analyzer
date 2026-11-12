@@ -9,7 +9,8 @@ export default function ThreadInfoCard({
   onSelectPost, 
   onScan, 
   scanning = false,
-  username = "threads_user"
+  username = "threads_user",
+  canScan = true
 }) {
   const [page, setPage] = useState(1);
 
@@ -145,10 +146,11 @@ export default function ThreadInfoCard({
       <button 
         className="tic-scan-btn" 
         onClick={onScan} 
-        disabled={scanning}
-        style={{ opacity: scanning ? 0.7 : 1, cursor: scanning ? 'not-allowed' : 'pointer' }}
+        disabled={scanning || !canScan}
+        style={{ opacity: (scanning || !canScan) ? 0.6 : 1, cursor: (scanning || !canScan) ? 'not-allowed' : 'pointer' }}
+        title={!canScan ? 'Bạn đã hết lượt phân tích hôm nay. Nâng cấp VIP để phân tích không giới hạn.' : undefined}
       >
-        {scanning ? '⏳ Đang phân tích...' : '↻ Quét & Phân tích bài viết'}
+        {scanning ? 'Đang phân tích...' : !canScan ? 'Hết lượt phân tích hôm nay' : 'Quét & Phân tích bài viết'}
       </button>
     </div>
   );
