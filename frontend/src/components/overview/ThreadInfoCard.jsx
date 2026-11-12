@@ -10,7 +10,8 @@ export default function ThreadInfoCard({
   onScan, 
   scanning = false,
   username = "threads_user",
-  canScan = true
+  canScan = true,
+  onExportReport
 }) {
   const [page, setPage] = useState(1);
 
@@ -39,7 +40,19 @@ export default function ThreadInfoCard({
     <div className="tic-wrap">
       <div className="tic-list-header">
         <span className="tic-list-title">📋 Danh sách bài viết</span>
-        <span className="tic-list-count">{displayPosts.length} bài</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {onExportReport && (
+            <button
+              type="button"
+              className="tic-export-btn"
+              onClick={onExportReport}
+              title="Xuất bản tóm tắt hoặc tải file báo cáo AI"
+            >
+              📥 Xuất báo cáo
+            </button>
+          )}
+          <span className="tic-list-count">{displayPosts.length} bài</span>
+        </div>
       </div>
 
       <div className="tic-list">

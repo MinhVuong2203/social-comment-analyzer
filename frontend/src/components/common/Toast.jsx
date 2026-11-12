@@ -63,3 +63,4 @@ export default function Toast({ id, type = 'info', message, duration = 3500, onC
     </div>
   );
 }
+
