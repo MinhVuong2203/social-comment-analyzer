@@ -5,7 +5,6 @@ import ThreadInfoCard from '../components/overview/ThreadInfoCard';
 import SummaryCard from '../components/overview/SummaryCard';
 import SentimentCard from '../components/overview/SentimentCard';
 import ToxicityCard from '../components/overview/ToxicityCard';
-import QuickActions from '../components/overview/QuickActions';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/apiService';
 import { useAuth } from '../context/AuthContext';
@@ -227,11 +226,6 @@ export default function OverviewPage() {
       <SummaryCard stats={summaryStats} />
       <SentimentCard sentiment={sentimentData} />
       <ToxicityCard toxicity={toxicityData} />
-      <QuickActions onAction={(id) => {
-        if (id === 'view-replies' || id === 'filter-toxic' || id === 'deep-analysis') {
-          navigate('/comments');
-        }
-      }} />
     </div>
   );
 }

@@ -5,12 +5,12 @@ import { useAuth } from '../../context/AuthContext';
 import './Header.css';
 
 const TABS = [
-  { id: 'overview',   label: 'Tổng quan',     path: '/overview' },
-  { id: 'comments',   label: 'Bình luận',     path: '/comments' },
-  { id: 'ai-analysis',label: 'AI Analysis',  path: '/ai-analysis' },
-  { id: 'statistics', label: 'Thống kê',   path: '/statistics' },
-  { id: 'profile',    label: 'Cá nhân & VIP', path: '/profile' },
-  { id: 'settings',   label: 'Cài đặt',     path: '/settings' },
+  { id: 'overview', label: 'Tổng quan', path: '/overview' },
+  { id: 'comments', label: 'Bình luận', path: '/comments' },
+  // { id: 'ai-analysis',label: 'AI Analysis',  path: '/ai-analysis' },
+  { id: 'statistics', label: 'Thống kê', path: '/statistics' },
+  { id: 'profile', label: 'Cá nhân & VIP', path: '/profile' },
+  { id: 'settings', label: 'Cài đặt', path: '/settings' },
 ];
 
 export default function Header() {
@@ -45,16 +45,16 @@ export default function Header() {
 
         <div className="header-top-right">
           {/* Clickable User Profile Badge with Avatar */}
-          <div 
+          <div
             className="user-profile-badge"
             onClick={() => navigate('/profile')}
             title="Nhấn để xem trang cá nhân & mua gói VIP"
           >
             {user?.profilePicture ? (
-              <img 
-                src={user.profilePicture} 
-                alt="Avatar" 
-                className="user-avatar-img" 
+              <img
+                src={user.profilePicture}
+                alt="Avatar"
+                className="user-avatar-img"
               />
             ) : (
               <div className="user-avatar-fallback">

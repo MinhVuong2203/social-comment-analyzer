@@ -6,7 +6,13 @@ import zipfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Dict, Tuple, Optional
-from pyvi import ViTokenizer
+try:
+    from pyvi import ViTokenizer
+except ImportError:
+    class ViTokenizer:
+        @staticmethod
+        def tokenize(text: str) -> str:
+            return text
 
 from .config import (
     TEENCODE_JSON_PATH,
