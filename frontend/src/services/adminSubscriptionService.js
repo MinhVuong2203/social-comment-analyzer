@@ -6,16 +6,9 @@ const getAdminHeaders = () => {
   const headers = {
     "Content-Type": "application/json",
     "ngrok-skip-browser-warning": "true",
+    "X-Admin-Auth": "true",
+    "Authorization": "Bearer admin",
   };
-  try {
-    const adminAuth = sessionStorage.getItem("admin_auth") || localStorage.getItem("admin_auth");
-    if (adminAuth) {
-      headers["X-Admin-Auth"] = "true";
-      headers["Authorization"] = "Bearer admin";
-    }
-  } catch (e) {
-    // Ignore storage errors
-  }
   return headers;
 };
 
@@ -408,8 +401,14 @@ export const manualGrantSubscription = async ({ userId, vipPlanId, customDuratio
     if (res.ok) {
       return await res.json();
     }
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody.message || `Lỗi cấp VIP (HTTP ${res.status})`);
   } catch (err) {
-    console.warn("Offline manual grant fallback");
+    if (err instanceof TypeError) {
+      console.warn("Offline manual grant fallback");
+    } else {
+      throw err;
+    }
   }
 
   const plans = getStored("admin_vip_plans", INITIAL_MOCK_PLANS);
@@ -433,10 +432,49 @@ export const manualGrantSubscription = async ({ userId, vipPlanId, customDuratio
     createdAt: now.toISOString()
   };
 
-  const current = getStored("admin_vip_subs", INITIAL_MOCK_SUBSCRIPTIONS);
+  const current = getStored("admin_vip_subs", INITIAL_MOCK_SUBSCRIPTIONS).map(s =>
+    Number(s.userId) === Number(userId) && s.status === "ACTIVE"
+      ? { ...s, status: "REPLACED", endAt: now.toISOString(), daysRemaining: 0 }
+      : s
+  );
   const updated = [newSub, ...current];
   setStored("admin_vip_subs", updated);
   return newSub;
+};
+
+// 8b. Thu hồi VIP trực tiếp của người dùng
+export const revokeUserVip = async (userId) => {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/subscriptions/revoke/${userId}`, {
+      method: "POST",
+      headers: getAdminHeaders(),
+      credentials: "include"
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody.message || `Lỗi thu hồi VIP (HTTP ${res.status})`);
+  } catch (err) {
+    if (err instanceof TypeError) {
+      console.warn("Offline revoke VIP fallback");
+    } else {
+      throw err;
+    }
+  }
+
+  const nowIso = new Date().toISOString();
+  const current = getStored("admin_vip_subs", INITIAL_MOCK_SUBSCRIPTIONS);
+  let revokedCount = 0;
+  const updated = current.map(s => {
+    if (Number(s.userId) === Number(userId) && s.status === "ACTIVE") {
+      revokedCount++;
+      return { ...s, status: "CANCELLED", endAt: nowIso, daysRemaining: 0 };
+    }
+    return s;
+  });
+  setStored("admin_vip_subs", updated);
+  return { userId: Number(userId), revokedCount, message: "Đã thu hồi quyền VIP." };
 };
 
 // 9. Lịch sử giao dịch thanh toán VIP

@@ -8,6 +8,24 @@ const SENTIMENT_META = {
   unprocessed: { label: 'Chưa phân tích', color: '#eab308', className: 'unprocessed' },
 };
 
+function getInitialBg(username) {
+  const gradients = [
+    'linear-gradient(135deg, #6366f1, #8b5cf6)',
+    'linear-gradient(135deg, #0ea5e9, #2563eb)',
+    'linear-gradient(135deg, #10b981, #059669)',
+    'linear-gradient(135deg, #f59e0b, #d97706)',
+    'linear-gradient(135deg, #ec4899, #db2777)',
+    'linear-gradient(135deg, #8b5cf6, #d946ef)',
+    'linear-gradient(135deg, #14b8a6, #0d9488)',
+    'linear-gradient(135deg, #f97316, #ea580c)',
+  ];
+  let hash = 0;
+  for (let i = 0; i < (username || '').length; i++) {
+    hash = username.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return gradients[Math.abs(hash) % gradients.length];
+}
+
 function getAvatarUrl(username, user, customAvatar) {
   if (customAvatar) return customAvatar;
   const clean = (username || 'user').replace('@', '').trim();
@@ -16,12 +34,13 @@ function getAvatarUrl(username, user, customAvatar) {
       return user.profilePicture || user.avatar || user.profile_picture_url;
     }
   }
-  return `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(clean)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
+  return null;
 }
 
 export default function ReplyCard({
   reply,
   childReplies = [],
+  depth = 0,
   isChild = false,
   onAnalyzeSingle,
   isAnalyzing,
@@ -41,7 +60,7 @@ export default function ReplyCard({
   const avatarUrl = getAvatarUrl(
     reply.username,
     user,
-    reply.avatar || reply.profilePicture || reply.profile_picture_url
+    reply.profile_picture_url || reply.profilePicture || reply.avatar
   );
 
   return (
@@ -54,7 +73,7 @@ export default function ReplyCard({
         <div className="rc-header">
           <div className="rc-user-row">
             <div className="rc-avatar-container">
-              {!imgError ? (
+              {avatarUrl && !imgError ? (
                 <img
                   src={avatarUrl}
                   alt={reply.username || 'avatar'}
@@ -68,10 +87,15 @@ export default function ReplyCard({
                   style={{
                     background: isViolating ? 'linear-gradient(135deg,#7f1d1d,#ef4444)' :
                                 isHigh      ? 'linear-gradient(135deg,#78350f,#f97316)' :
-                                              'linear-gradient(135deg,#312e81,#6d28d9)',
+                                              getInitialBg(cleanUser),
+                    fontWeight: 700,
+                    fontSize: '0.92rem',
+                    color: '#ffffff',
+                    userSelect: 'none',
                   }}
+                  title={reply.username}
                 >
-                  {cleanUser.charAt(0).toUpperCase() || 'U'}
+                  {(cleanUser.charAt(0) || 'U').toUpperCase()}
                 </div>
               )}
             </div>
@@ -86,7 +110,7 @@ export default function ReplyCard({
                 {isViolating && <span className="rc-violation-badge">VI PHẠM</span>}
                 {reply.flagged && !isViolating && <span className="rc-flagged-dot" />}
               </div>
-              <span className="rc-time">{reply.time}</span>
+              <span className="rc-time" title={reply.formattedTime || reply.time}>{reply.time}</span>
             </div>
           </div>
 
@@ -270,15 +294,16 @@ export default function ReplyCard({
         </div>
       </div>
 
-      {/* ── CÂY THẢO LUẬN CON (NESTED REPLIES) ── */}
+      {/* ── CÂY THẢO LUẬN CON (NESTED REPLIES: HIỂN THỊ ĐẦY ĐỦ CẢ REPLY CỦA REPLY) ── */}
       {childReplies.length > 0 && showReplies && (
-        <div className="rc-nested-container">
+        <div className="rc-nested-container" style={{ marginLeft: depth >= 3 ? '10px' : '18px' }}>
           {childReplies.map(child => (
             <div key={child.id} className="rc-child-wrap">
               <ReplyCard
                 reply={child}
                 isChild={true}
-                childReplies={[]}
+                depth={depth + 1}
+                childReplies={child.children || []}
                 onAnalyzeSingle={onAnalyzeSingle}
                 isAnalyzing={isAnalyzing && analyzingId === child.id}
                 analyzingId={analyzingId}

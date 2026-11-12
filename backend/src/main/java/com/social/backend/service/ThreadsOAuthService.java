@@ -164,7 +164,7 @@ public class ThreadsOAuthService {
         String url = "https://graph.threads.net/v1.0/"
                 + postId
                 + "/conversation"
-                + "?fields=id,username,text,timestamp,permalink,has_replies,root_post,replied_to,is_reply"
+                + "?fields=id,username,text,timestamp,permalink,has_replies,root_post,replied_to,is_reply,profile_picture_url"
                 + "&reverse=false"
                 + "&access_token=" + accessToken;
 
@@ -194,7 +194,7 @@ public class ThreadsOAuthService {
                 "https://graph.threads.net/"
                 + postId
                 + "/replies"
-                + "?fields=id,username,text,timestamp,replied_to,is_reply"
+                + "?fields=id,username,text,timestamp,replied_to,is_reply,profile_picture_url"
                 + "&access_token=" + accessToken;
 
         String response =
