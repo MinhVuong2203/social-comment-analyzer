@@ -251,6 +251,8 @@ export default function OverviewPage() {
         onScan={handleScanPost}
         scanning={analyzing}
         username={user?.username}
+        avatar={user?.profilePicture || user?.profilePictureUrl || user?.profile_picture_url || user?.avatar}
+        user={user}
         canScan={vipStatus.isVipOrAdmin || vipStatus.remainingAnalysis > 0}
         onExportReport={() => setIsExportOpen(true)}
       />

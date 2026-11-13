@@ -344,7 +344,7 @@ export default function ProfilePage() {
                       </div>
                       <div className="flex items-center space-x-1.5">
                         <Check size={12} className="text-[#10b981] shrink-0" />
-                        <span>Phát hiện toxic, hateful comment tự động</span>
+                        <span>Mở khóa cài đặt ngưỡng cảnh báo</span>
                       </div>
                       <div className="flex items-center space-x-1.5">
                         <Check size={12} className="text-[#10b981] shrink-0" />

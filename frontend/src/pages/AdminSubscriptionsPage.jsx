@@ -393,7 +393,7 @@ export default function AdminSubscriptionsPage() {
                 className="px-2.5 py-1.5 bg-[#c0c1ff] hover:bg-[#8083ff] text-[#1000a9] font-semibold text-[11px] rounded-lg transition flex items-center space-x-1 shadow-md"
               >
                 <Plus size={13} />
-                <span>+ Thêm gói VIP</span>
+                <span>Thêm gói VIP</span>
               </button>
             </div>
 
