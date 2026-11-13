@@ -1,7 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { mockReplies, mockPosts } from '../utils/mockData';
-import ReplyCard from '../components/comments/ReplyCard';
+import ReplyCard, { checkThresholdExceeded, getHateSpeechInfo } from '../components/comments/ReplyCard';
 import { apiService } from '../services/apiService';
+import { getUserSettings, getLocalUserSettings } from '../services/settingsService';
 import { useAuth } from '../context/AuthContext';
 import '../assets/styles/Comment.css';
 
@@ -77,7 +79,11 @@ export function getCommentTimestamp(item) {
 }
 
 export default function CommentsPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
+
+  // ── Ngưỡng cảnh báo lấy từ Cài đặt (SettingsPage) ──
+  const [thresholds, setThresholds] = useState(() => getLocalUserSettings());
 
   // ── Posts state ──
   const [posts,            setPosts]          = useState(mockPosts);
@@ -96,6 +102,38 @@ export default function CommentsPage() {
   const [analyzingId,    setAnalyzingId] = useState(null);
   const [statusMsg,      setStatusMsg]   = useState('');
   const [isMockMode,     setIsMockMode]  = useState(false);
+
+  // ── Đồng bộ cài đặt ngưỡng cảnh báo từ SettingsPage (qua API và event) ──
+  useEffect(() => {
+    let mounted = true;
+
+    getUserSettings().then(data => {
+      if (mounted && data) {
+        setThresholds({
+          toxicThreshold: data.toxicThreshold ?? 50,
+          hateThreshold: data.hateThreshold ?? 50,
+          sentimentThreshold: data.sentimentThreshold ?? 50,
+          theme: data.theme || 'dark',
+        });
+      }
+    });
+
+    const handleSettingsUpdated = (e) => {
+      if (e.detail) {
+        setThresholds(prev => ({ ...prev, ...e.detail }));
+      } else {
+        setThresholds(getLocalUserSettings());
+      }
+    };
+
+    window.addEventListener('app-settings-updated', handleSettingsUpdated);
+    window.addEventListener('storage', handleSettingsUpdated);
+    return () => {
+      mounted = false;
+      window.removeEventListener('app-settings-updated', handleSettingsUpdated);
+      window.removeEventListener('storage', handleSettingsUpdated);
+    };
+  }, []);
 
   // ── Nạp danh sách bài viết từ Backend (Threads API) ──
   useEffect(() => {
@@ -153,16 +191,25 @@ export default function CommentsPage() {
               const hasPrediction = Boolean(c.toxicity && c.toxicity.label);
               const toxLabel = c.toxicity?.label || 'NON-TOXIC';
               const hateObj = c.hate_speech || c.hateSpeech;
-              const hateLabel = (hateObj?.label || 'CLEAN');
+              
+              // Chuẩn hóa nhãn Hate Speech: CLEAN / OFFENSIVE / HATE
+              const rawHate = (hateObj?.label || 'CLEAN').toUpperCase();
+              let hateLabel = 'CLEAN';
+              if (rawHate.includes('HATE')) hateLabel = 'HATE';
+              else if (rawHate.includes('OFFENSIVE')) hateLabel = 'OFFENSIVE';
+              else hateLabel = 'CLEAN';
+
               const sentLabel = (c.sentiment?.label || 'NEUTRAL').toLowerCase();
 
               const toxVal = toxLabel === 'TOXIC'
                 ? Math.round((c.toxicity?.confidence || 0.9) * 100)
                 : Math.max(1, Math.round(((c.toxicity?.probabilities?.TOXIC || (1 - (c.toxicity?.confidence || 0.95)))) * 100));
 
+              // Độ tin cậy cho Hate Speech
+              const hateScore = Math.round((hateObj?.confidence || 0.9) * 100);
               const hateVal = hateLabel === 'HATE'
-                ? Math.round((hateObj?.confidence || 0.9) * 100)
-                : 0;
+                ? hateScore
+                : (hateLabel === 'OFFENSIVE' ? hateScore : 0);
 
               const sentConf = Math.round((c.sentiment?.confidence || 0.9) * 100);
 
@@ -183,6 +230,8 @@ export default function CommentsPage() {
                 sentimentScore: hasPrediction ? sentConf : 0,
                 toxicity: hasPrediction ? toxVal : null,
                 hate: hasPrediction ? hateVal : null,
+                hateLabel: hasPrediction ? hateLabel : null,
+                hateScore: hasPrediction ? hateScore : null,
                 confidence: hasPrediction ? sentConf : null,
                 flagged: hasPrediction ? (toxLabel === 'TOXIC' || hateLabel === 'HATE' || toxVal >= 60) : false,
                 violating: hasPrediction ? (hateLabel === 'HATE') : false,
@@ -245,20 +294,18 @@ export default function CommentsPage() {
 
       if (isParentInList && !isReplyToRootPost && pId !== String(item.id).trim()) {
         const parentNode = itemMap.get(pId);
-        // Tự động gán người nhận replyToUser nếu chưa có
         if (!item.replyToUser && parentNode.username) {
           item.replyToUser = parentNode.username;
         }
         item.isReply = true;
         parentNode.children.push(item);
       } else {
-        // Comment cấp 1 (reply bài root) hoặc các reply không tìm thấy parent ID trong danh sách (để không bị bỏ sót bất kỳ bình luận nào)
         item.isReply = false;
         roots.push(item);
       }
     });
 
-    // 3. Sắp xếp các reply con trong từng luồng theo thứ tự thời gian tăng dần (cũ nhất ở trên -> mới nhất ở dưới)
+    // 3. Sắp xếp các reply con trong từng luồng theo thứ tự thời gian tăng dần
     function sortThreadReplies(children) {
       children.sort((a, b) => getCommentTimestamp(a) - getCommentTimestamp(b));
       children.forEach(child => {
@@ -284,34 +331,91 @@ export default function CommentsPage() {
     };
   }, [replies, selectedPostId]);
 
-  // ── Dynamic Filters based on real comments state ──
+  // ── Stats calculation (Tổng hợp các chỉ số và phát hiện vượt ngưỡng cài đặt) ──
+  const stats = useMemo(() => {
+    const analyzedList = replies.filter(r => r.analyzed);
+    const posCount = analyzedList.filter(r => r.sentiment === 'positive').length;
+    const neuCount = analyzedList.filter(r => r.sentiment === 'neutral').length;
+    const negCount = analyzedList.filter(r => r.sentiment === 'negative').length;
+    const toxCount = analyzedList.filter(r => (r.toxicity || 0) >= (thresholds.toxicThreshold || 50) || r.toxicityLevel === 'High').length;
+    const unprocCount = replies.filter(r => !r.analyzed).length;
+
+    let cleanCount = 0;
+    let offensiveCount = 0;
+    let hateCount = 0;
+    let exceededCount = 0;
+
+    analyzedList.forEach(r => {
+      const h = getHateSpeechInfo(r);
+      if (h.key === 'HATE') hateCount++;
+      else if (h.key === 'OFFENSIVE') offensiveCount++;
+      else cleanCount++;
+
+      if (checkThresholdExceeded(r, thresholds).isExceeded) {
+        exceededCount++;
+      }
+    });
+
+    return {
+      posCount,
+      neuCount,
+      negCount,
+      toxCount,
+      unprocCount,
+      cleanCount,
+      offensiveCount,
+      hateCount,
+      exceededCount,
+    };
+  }, [replies, thresholds]);
+
+  // ── Dynamic Filters based on real comments state & settings ──
   const dynamicFilters = useMemo(() => {
     const total = replies.length;
-    const unproc = replies.filter(r => !r.analyzed || r.sentiment === 'unprocessed').length;
-    const pos = replies.filter(r => r.analyzed && r.sentiment === 'positive').length;
-    const neu = replies.filter(r => r.analyzed && r.sentiment === 'neutral').length;
-    const neg = replies.filter(r => r.analyzed && r.sentiment === 'negative').length;
+    const unproc = stats.unprocCount;
+    const pos = stats.posCount;
+    const neu = stats.neuCount;
+    const neg = stats.negCount;
+    const exceeded = stats.exceededCount;
     
     const filters = [
       { id: 'all', label: 'Tất cả', count: total },
     ];
+
+    // Nút lọc nhanh bình luận VƯỢT NGƯỠNG
+    if (exceeded > 0) {
+      filters.push({ id: 'exceeded', label: 'Vượt ngưỡng', count: exceeded, isExceeded: true });
+    }
+
     if (unproc > 0) {
       filters.push({ id: 'unprocessed', label: 'Chưa phân tích', count: unproc });
     }
+
     filters.push(
       { id: 'positive', label: 'Tích cực', count: pos },
       { id: 'neutral',  label: 'Trung tính', count: neu },
-      { id: 'negative', label: 'Tiêu cực', count: neg }
+      { id: 'negative', label: 'Tiêu cực', count: neg },
+      { id: 'clean', label: 'Clean', count: stats.cleanCount },
+      { id: 'offensive', label: 'Offensive', count: stats.offensiveCount },
+      { id: 'hate', label: 'Hate', count: stats.hateCount }
     );
     return filters;
-  }, [replies]);
+  }, [replies, stats]);
 
   // ── Lọc và sắp xếp theo cây phân cấp (Hierarchical Filtering & Sorting) ──
   const displayItems = useMemo(() => {
     const q = search.trim().toLowerCase();
 
     const matchesFilter = (item) => {
-      if (activeFilter === 'unprocessed') {
+      if (activeFilter === 'exceeded') {
+        if (!checkThresholdExceeded(item, thresholds).isExceeded) return false;
+      } else if (activeFilter === 'clean') {
+        if (!item.analyzed || getHateSpeechInfo(item).key !== 'CLEAN') return false;
+      } else if (activeFilter === 'offensive') {
+        if (!item.analyzed || getHateSpeechInfo(item).key !== 'OFFENSIVE') return false;
+      } else if (activeFilter === 'hate') {
+        if (!item.analyzed || getHateSpeechInfo(item).key !== 'HATE') return false;
+      } else if (activeFilter === 'unprocessed') {
         if (item.analyzed && item.sentiment !== 'unprocessed') return false;
       } else if (activeFilter !== 'all') {
         if (!item.analyzed || item.sentiment !== activeFilter) return false;
@@ -334,7 +438,7 @@ export default function CommentsPage() {
 
     let list = [...topLevelItems];
 
-    // Sắp xếp các comment cấp 1 (reply bài root) chuẩn xác theo mốc thời gian hoặc tiêu chí chọn
+    // Sắp xếp các comment cấp 1 chuẩn xác theo mốc thời gian hoặc tiêu chí chọn
     if (sort === 'Most Toxic') {
       list.sort((a, b) => (b.toxicity || 0) - (a.toxicity || 0));
     } else if (sort === 'Positive') {
@@ -342,10 +446,8 @@ export default function CommentsPage() {
     } else if (sort === 'Negative') {
       list.sort((a, b) => (b.sentiment === 'negative' ? 1 : 0) - (a.sentiment === 'negative' ? 1 : 0));
     } else if (sort === 'Oldest') {
-      // Cũ nhất trước: tăng dần theo mốc thời gian bình luận
       list.sort((a, b) => getCommentTimestamp(a) - getCommentTimestamp(b));
     } else {
-      // 'Newest' (Mặc định): Mới nhất trước - giảm dần theo mốc thời gian bình luận
       list.sort((a, b) => getCommentTimestamp(b) - getCommentTimestamp(a));
     }
 
@@ -354,17 +456,7 @@ export default function CommentsPage() {
     }
 
     return list.filter(hasMatchingDescendant);
-  }, [topLevelItems, activeFilter, search, sort]);
-
-  // ── Stats calculation ──
-  const stats = useMemo(() => {
-    const analyzedList = replies.filter(r => r.analyzed);
-    const posCount = analyzedList.filter(r => r.sentiment === 'positive').length;
-    const neuCount = analyzedList.filter(r => r.sentiment === 'neutral').length;
-    const toxCount = analyzedList.filter(r => (r.toxicity || 0) >= 60 || r.toxicityLevel === 'High').length;
-    const unprocCount = replies.filter(r => !r.analyzed).length;
-    return { posCount, neuCount, toxCount, unprocCount };
-  }, [replies]);
+  }, [topLevelItems, activeFilter, search, sort, thresholds]);
 
   // ── Phân tích TẤT CẢ bình luận & replies trong bài viết ──
   const handleAnalyzeAll = async () => {
@@ -383,9 +475,16 @@ export default function CommentsPage() {
             const mapped = res.comments.map(c => {
               const toxLabel = c.toxicity?.label || 'NON-TOXIC';
               const hateObj = c.hate_speech || c.hateSpeech;
-              const hateLabel = (hateObj?.label || 'CLEAN');
+              
+              const rawHate = (hateObj?.label || 'CLEAN').toUpperCase();
+              let hateLabel = 'CLEAN';
+              if (rawHate.includes('HATE')) hateLabel = 'HATE';
+              else if (rawHate.includes('OFFENSIVE')) hateLabel = 'OFFENSIVE';
+              else hateLabel = 'CLEAN';
+
               const toxVal = toxLabel === 'TOXIC' ? Math.round((c.toxicity?.confidence || 0.9) * 100) : 5;
-              const hateVal = hateLabel === 'HATE' ? Math.round((hateObj?.confidence || 0.9) * 100) : 0;
+              const hateScore = Math.round((hateObj?.confidence || 0.9) * 100);
+              const hateVal = hateLabel === 'HATE' ? hateScore : (hateLabel === 'OFFENSIVE' ? hateScore : 0);
               const sentConf = Math.round((c.sentiment?.confidence || 0.95) * 100);
 
               return {
@@ -405,6 +504,8 @@ export default function CommentsPage() {
                 sentimentScore: sentConf,
                 toxicity: toxVal,
                 hate: hateVal,
+                hateLabel: hateLabel,
+                hateScore: hateScore,
                 confidence: sentConf,
                 flagged: toxLabel === 'TOXIC' || hateLabel === 'HATE' || toxVal >= 60,
                 violating: hateLabel === 'HATE',
@@ -452,15 +553,21 @@ export default function CommentsPage() {
             const sentLabel = (p.sentiment?.label || 'NEUTRAL').toLowerCase();
             const toxLabel  = p.toxicity?.label || 'NON-TOXIC';
             const hateObj   = p.hate_speech || p.hateSpeech;
-            const hateLabel = (hateObj?.label || 'CLEAN');
+            
+            const rawHate = (hateObj?.label || 'CLEAN').toUpperCase();
+            let hateLabel = 'CLEAN';
+            if (rawHate.includes('HATE')) hateLabel = 'HATE';
+            else if (rawHate.includes('OFFENSIVE')) hateLabel = 'OFFENSIVE';
+            else hateLabel = 'CLEAN';
 
             const toxVal = toxLabel === 'TOXIC'
               ? Math.round(p.toxicity.confidence * 100)
               : Math.max(1, Math.round(((p.toxicity.probabilities?.TOXIC || (1 - p.toxicity.confidence))) * 100));
 
+            const hateScore = Math.round((hateObj?.confidence || 0.9) * 100);
             const hateVal = hateLabel === 'HATE'
-              ? Math.round((hateObj?.confidence || 0.9) * 100)
-              : Math.max(0, Math.round(((hateObj?.probabilities?.HATE || 0)) * 100));
+              ? hateScore
+              : (hateLabel === 'OFFENSIVE' ? hateScore : Math.max(0, Math.round(((hateObj?.probabilities?.HATE || 0)) * 100)));
 
             const sentConf = Math.round((p.sentiment?.confidence || 0.95) * 100);
             const avgConf = Math.round(((p.toxicity.confidence + (hateObj?.confidence || 0.95) + p.sentiment.confidence) / 3) * 100);
@@ -471,6 +578,8 @@ export default function CommentsPage() {
               sentimentScore: sentConf,
               toxicity: toxVal,
               hate: hateVal,
+              hateLabel: hateLabel,
+              hateScore: hateScore,
               confidence: avgConf,
               flagged: toxLabel === 'TOXIC' || hateLabel === 'HATE' || toxVal >= 60,
               violating: hateLabel === 'HATE',
@@ -518,15 +627,21 @@ export default function CommentsPage() {
         const sentLabel = (pred.sentiment?.label || 'NEUTRAL').toLowerCase();
         const toxLabel  = pred.toxicity?.label || 'NON-TOXIC';
         const hateObj   = pred.hate_speech || pred.hateSpeech;
-        const hateLabel = (hateObj?.label || 'CLEAN');
+        
+        const rawHate = (hateObj?.label || 'CLEAN').toUpperCase();
+        let hateLabel = 'CLEAN';
+        if (rawHate.includes('HATE')) hateLabel = 'HATE';
+        else if (rawHate.includes('OFFENSIVE')) hateLabel = 'OFFENSIVE';
+        else hateLabel = 'CLEAN';
 
         const toxVal = toxLabel === 'TOXIC'
           ? Math.round(pred.toxicity.confidence * 100)
           : Math.max(1, Math.round(((pred.toxicity.probabilities?.TOXIC || (1 - pred.toxicity.confidence))) * 100));
 
+        const hateScore = Math.round((hateObj?.confidence || 0.9) * 100);
         const hateVal = hateLabel === 'HATE'
-          ? Math.round((hateObj?.confidence || 0.9) * 100)
-          : Math.max(0, Math.round(((hateObj?.probabilities?.HATE || 0)) * 100));
+          ? hateScore
+          : (hateLabel === 'OFFENSIVE' ? hateScore : Math.max(0, Math.round(((hateObj?.probabilities?.HATE || 0)) * 100)));
 
         const sentConf = Math.round((pred.sentiment?.confidence || 0.95) * 100);
         const avgConf = Math.round(((pred.toxicity.confidence + (hateObj?.confidence || 0.95) + pred.sentiment.confidence) / 3) * 100);
@@ -537,6 +652,8 @@ export default function CommentsPage() {
           sentimentScore: sentConf,
           toxicity: toxVal,
           hate: hateVal,
+          hateLabel: hateLabel,
+          hateScore: hateScore,
           confidence: avgConf,
           flagged: toxLabel === 'TOXIC' || hateLabel === 'HATE' || toxVal >= 60,
           violating: hateLabel === 'HATE',
@@ -545,7 +662,7 @@ export default function CommentsPage() {
           rawPrediction: pred,
         } : r));
 
-        setStatusMsg(`Đã phân tích xong: [Toxicity: ${toxLabel} (${toxVal}%), Sắc thái: ${sentLabel.toUpperCase()}]`);
+        setStatusMsg(`Đã phân tích xong: [Toxicity: ${toxLabel} (${toxVal}%), Hate: ${hateLabel} (${hateScore}%), Sắc thái: ${sentLabel.toUpperCase()}]`);
       } else {
         setStatusMsg('Không thể phân tích: Không kết nối được tới PhoBERT AI Service (cổng 8000).');
       }
@@ -601,7 +718,6 @@ export default function CommentsPage() {
         {/* Thông báo tiến độ / trạng thái phân tích */}
         {statusMsg && (
           <div className="ct-status-toast">
-
             <span>{statusMsg}</span>
           </div>
         )}
@@ -646,6 +762,59 @@ export default function CommentsPage() {
           title="Đồng bộ lại bình luận từ Threads"
         >
           {isLoadingComments ? <span className="ct-spinner" /> : 'Đồng bộ'}
+        </button>
+      </div>
+
+      {/* ── THÔNG TIN NGƯỠNG CẢNH BÁO TỪ SETTINGSPAGE (LÀM NỔI BẬT) ── */}
+      <div className={`ct-threshold-bar ${stats.exceededCount > 0 ? 'ct-threshold-bar--has-alert' : ''}`}>
+        <div className="ct-threshold-left">
+          <div className="ct-threshold-badge-icon">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </div>
+          <div className="ct-threshold-text-wrap">
+            <span className="ct-threshold-title">NGƯỠNG CẢNH BÁO CÀI ĐẶT:</span>
+            <div className="ct-threshold-pill-group">
+              <span className="ct-threshold-pill ct-threshold-pill--toxic" title="Ngưỡng độc hại cài đặt tại Settings">
+                Toxicity ≥ <strong>{thresholds.toxicThreshold}%</strong>
+              </span>
+              <span className="ct-threshold-pill ct-threshold-pill--hate" title="Ngưỡng thù ghét/xúc phạm cài đặt tại Settings">
+                Hate Speech ≥ <strong>{thresholds.hateThreshold}%</strong>
+              </span>
+              <span className="ct-threshold-pill ct-threshold-pill--sent" title="Ngưỡng cảm xúc tiêu cực cài đặt tại Settings">
+                Tiêu cực ≥ <strong>{thresholds.sentimentThreshold}%</strong>
+              </span>
+            </div>
+          </div>
+          {stats.exceededCount > 0 ? (
+            <button
+              type="button"
+              className="ct-threshold-alert-tag"
+              onClick={() => setFilter('exceeded')}
+              title="Bấm để lọc ngay các bình luận vượt ngưỡng cài đặt"
+            >
+              <span className="ct-alert-pulse" />
+              {stats.exceededCount} vượt ngưỡng
+            </button>
+          ) : (
+            <span className="ct-threshold-safe-tag">
+              ✓ Chưa có bình luận vượt ngưỡng
+            </span>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className="ct-threshold-settings-btn"
+          onClick={() => navigate('/settings')}
+          title="Mở trang Cài đặt để tùy chỉnh lại các thông số ngưỡng %"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          Đổi cài đặt
         </button>
       </div>
 
@@ -704,10 +873,14 @@ export default function CommentsPage() {
         {dynamicFilters.map(f => (
           <button
             key={f.id}
-            className={`ct-chip ${activeFilter === f.id ? 'active' : ''} ct-chip--${f.id}`}
+            className={`ct-chip ${activeFilter === f.id ? 'active' : ''} ct-chip--${f.id} ${f.isExceeded ? 'ct-chip--exceeded' : ''}`}
             onClick={() => setFilter(f.id)}
           >
-            {f.id !== 'all' && <span className={`ct-chip-dot ct-chip-dot--${f.id}`} />}
+            {f.isExceeded ? (
+              <span className="ct-alert-dot" />
+            ) : f.id !== 'all' && (
+              <span className={`ct-chip-dot ct-chip-dot--${f.id}`} />
+            )}
             {f.label} {f.count}
           </button>
         ))}
@@ -762,6 +935,7 @@ export default function CommentsPage() {
               onAnalyzeSingle={handleAnalyzeSingle}
               isAnalyzing={isAnalyzing || analyzingId === item.id}
               analyzingId={analyzingId}
+              thresholds={thresholds}
             />
           ))}
         </div>
@@ -788,11 +962,19 @@ export default function CommentsPage() {
         {stats.unprocCount > 0 && (
           <span className="ct-stat" style={{ color: '#facc15' }}>Chưa phân tích: {stats.unprocCount}</span>
         )}
+        {stats.exceededCount > 0 && (
+          <span className="ct-stat" style={{ color: '#ef4444', fontWeight: 800 }}>
+            Vượt ngưỡng: {stats.exceededCount}
+          </span>
+        )}
         <span className="ct-stat" style={{ color: '#38bdf8' }}>Bình luận: {totalTopLevel}</span>
         <span className="ct-stat" style={{ color: '#a78bfa' }}>Phản hồi: {totalChildReplies}</span>
         <span className="ct-stat ct-stat--pos">Tích cực: {stats.posCount}</span>
         <span className="ct-stat ct-stat--neu">Trung tính: {stats.neuCount}</span>
         <span className="ct-stat ct-stat--neg">Độc hại: {stats.toxCount}</span>
+        <span className="ct-stat" style={{ color: '#10b981' }}>Clean: {stats.cleanCount}</span>
+        <span className="ct-stat" style={{ color: '#f59e0b' }}>Offensive: {stats.offensiveCount}</span>
+        <span className="ct-stat" style={{ color: '#ef4444' }}>Hate: {stats.hateCount}</span>
       </div>
 
     </div>

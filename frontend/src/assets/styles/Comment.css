@@ -438,30 +438,30 @@
   cursor: pointer;
 }
 
-/* metrics grid: hiển thị trực tiếp tất cả thông số */
+/* metrics grid: hiển thị 3 thông số gọn gàng (Độc hại, Hate Speech, Sắc thái) */
 .rc-metrics-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  margin: 6px 0 10px;
-  padding: 8px 10px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin: 4px 0 6px;
+  padding: 4px 7px;
   background: rgba(15, 23, 42, 0.65);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
+  border-radius: 6px;
 }
 @media (max-width: 640px) {
   .rc-metrics-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
   }
 }
 .rc-metric-item {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 6px 8px;
+  gap: 2px;
+  padding: 4px 6px;
   background: rgba(255, 255, 255, 0.025);
   border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 6px;
+  border-radius: 5px;
 }
 .rc-metric-top {
   display: flex;
@@ -899,4 +899,380 @@
   border-radius: 10px;
   padding: 1px 6px;
   margin-left: 2px;
+}
+
+
+/* ════════════════════════════════════════════════
+   THRESHOLD STATUS BAR & EXCEEDED SETTINGS STYLES
+════════════════════════════════════════════════ */
+.ct-threshold-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 7px 12px;
+  margin-top: 6px;
+  margin-bottom: 2px;
+  transition: all 0.25s ease;
+}
+
+.ct-threshold-bar--has-alert {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(15, 23, 42, 0.85));
+  border-color: rgba(239, 68, 68, 0.35);
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.15);
+}
+
+.ct-threshold-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ct-threshold-left::-webkit-scrollbar { display: none; }
+
+.ct-threshold-badge-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ct-threshold-bar--has-alert .ct-threshold-badge-icon {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+.ct-threshold-text-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ct-threshold-title {
+  font-size: 10px;
+  font-weight: 800;
+  color: #94a3b8;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.ct-threshold-pill-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ct-threshold-pill {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+}
+.ct-threshold-pill strong {
+  font-weight: 800;
+}
+.ct-threshold-pill--toxic strong { color: #f87171; }
+.ct-threshold-pill--hate strong { color: #f59e0b; }
+.ct-threshold-pill--sent strong { color: #a78bfa; }
+
+.ct-threshold-alert-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  padding: 2px 9px;
+  border-radius: 99px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.ct-threshold-alert-tag:hover {
+  background: rgba(239, 68, 68, 0.32);
+  transform: translateY(-1px);
+}
+
+.ct-threshold-safe-tag {
+  font-size: 10px;
+  font-weight: 600;
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 2px 8px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+.ct-alert-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+  animation: ct-live-pulse 1.2s ease-in-out infinite;
+}
+
+.ct-threshold-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+  border-radius: 6px;
+  padding: 4px 9px;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.ct-threshold-settings-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* ── Filter chip vượt ngưỡng ── */
+.ct-chip.ct-chip--exceeded {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #f87171;
+  font-weight: 700;
+}
+.ct-chip.active.ct-chip--exceeded {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+}
+.ct-chip.active.ct-chip--clean {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+.ct-chip.active.ct-chip--offensive {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+}
+.ct-chip.active.ct-chip--hate {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #f87171;
+}
+.ct-chip-dot--clean { background: #10b981; }
+.ct-chip-dot--offensive { background: #f59e0b; }
+.ct-chip-dot--hate { background: #ef4444; }
+.ct-alert-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 6px #ef4444;
+  animation: ct-live-pulse 1.2s ease-in-out infinite;
+}
+
+/* ════════════════════════════════════════════════
+   REPLY CARD: LÀM NỔI BẬT KHI VƯỢT NGƯỠNG CÀI ĐẶT
+════════════════════════════════════════════════ */
+.rc-wrap.rc-threshold-exceeded {
+  border-color: rgba(239, 68, 68, 0.5) !important;
+  border-left: 4px solid #ef4444 !important;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(24, 18, 28, 0.95) 100%) !important;
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.18), 0 0 0 1px rgba(239, 68, 68, 0.25) !important;
+  position: relative;
+}
+
+.rc-threshold-pill {
+  font-size: 8.5px;
+  font-weight: 800;
+  background: rgba(239, 68, 68, 0.22);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  border-radius: 3px;
+  padding: 1px 6px;
+  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  animation: ct-live-pulse 2s ease-in-out infinite;
+}
+
+.rc-badge--exceeded {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(185, 28, 28, 0.35));
+  color: #fee2e2;
+  border: 1px solid #ef4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.35);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 800;
+}
+
+.rc-pulse-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 5px #ffffff;
+  animation: ct-live-pulse 1s ease-in-out infinite;
+}
+
+.rc-badge--hate {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.rc-badge--offensive {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.rc-badge--clean {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+/* ── Phần hiển thị vượt ngưỡng bên phải trong header (ngang hàng avatar, tên) ── */
+.rc-header-exceeded-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.rc-header-exceeded-tags {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.rc-threshold-tag-inline {
+  font-size: 8.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.rc-threshold-tag-inline--toxic {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+}
+
+.rc-threshold-tag-inline--hate {
+  background: rgba(220, 38, 38, 0.25);
+  color: #fecaca;
+  border: 1px solid rgba(220, 38, 38, 0.5);
+}
+
+.rc-threshold-tag-inline--offensive {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fde68a;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+}
+
+.rc-threshold-tag-inline--sentiment {
+  background: rgba(168, 85, 247, 0.2);
+  color: #e9d5ff;
+  border: 1px solid rgba(168, 85, 247, 0.45);
+}
+
+/* ── Highlight trong bảng Metrics Grid ── */
+.rc-metric-item--exceeded {
+  border-color: rgba(239, 68, 68, 0.45) !important;
+  background: rgba(239, 68, 68, 0.09) !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.15);
+}
+
+.rc-metric-exceeded-pill {
+  font-size: 7.5px;
+  font-weight: 800;
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.25);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  padding: 1px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+/* ── Segmented Tags thu gọn chiều cao cho cả 3 ô (Toxicity, Hate Speech, Sentiment) ── */
+.rc-segments {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 1px 2px;
+  border-radius: 4px;
+  margin: 1px 0 2px;
+}
+
+.rc-seg {
+  flex: 1;
+  text-align: center;
+  font-size: 8px;
+  font-weight: 700;
+  color: #64748b;
+  padding: 1.5px 0;
+  border-radius: 3px;
+  transition: all 0.15s ease;
+  user-select: none;
+  line-height: 1.15;
+  border: 1px solid transparent;
+}
+
+.rc-seg.active.active--clean {
+  background: rgba(16, 185, 129, 0.22);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.4);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.2);
+}
+
+.rc-seg.active.active--offensive {
+  background: rgba(245, 158, 11, 0.22);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.4);
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.2);
+}
+
+.rc-seg.active.active--hate {
+  background: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.45);
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.25);
+}
+
+.rc-seg.active.active--neu {
+  background: rgba(148, 163, 184, 0.18);
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.35);
 }
