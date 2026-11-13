@@ -25,7 +25,11 @@ import {
   Gauge,
   ChevronLeft,
   ChevronRight,
-  Download
+  Download,
+  Shield,
+  UserCheck,
+  UserX,
+  LogIn
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getAdminUsers, getUserActivity, lockUser, unlockUser } from '../services/adminUserService';
@@ -291,6 +295,70 @@ export default function AdminUsersPage() {
     const date = new Date(dateStr);
     const now = new Date();
     return date.toDateString() === now.toDateString();
+  };
+
+  const getAuditActionMeta = (action) => {
+    switch (action) {
+      case 'UNLOCK_USER':
+        return {
+          label: 'Mở khóa',
+          color: 'bg-[#4edea3]/15 text-[#4edea3] border-[#4edea3]/30',
+          icon: <UserCheck size={10} />
+        };
+      case 'LOCK_USER':
+        return {
+          label: 'Khóa tài khoản',
+          color: 'bg-[#93000a]/25 text-[#ffb4ab] border-[#ffb4ab]/30',
+          icon: <UserX size={10} />
+        };
+      case 'GRANT_VIP':
+        return {
+          label: 'Cấp / Gia hạn VIP',
+          color: 'bg-[#f59e0b]/15 text-[#fbbf24] border-[#f59e0b]/35',
+          icon: <Crown size={10} />
+        };
+      case 'REVOKE_VIP':
+        return {
+          label: 'Thu hồi VIP',
+          color: 'bg-[#fb7185]/15 text-[#fda4af] border-[#fb7185]/30',
+          icon: <ShieldOff size={10} />
+        };
+      case 'ADMIN_LOGIN':
+        return {
+          label: 'Đăng nhập Admin',
+          color: 'bg-[#4cd7f6]/15 text-[#4cd7f6] border-[#4cd7f6]/30',
+          icon: <LogIn size={10} />
+        };
+      case 'CREATE_PLAN':
+        return {
+          label: 'Tạo gói VIP',
+          color: 'bg-[#c0c1ff]/15 text-[#c0c1ff] border-[#c0c1ff]/30',
+          icon: <CreditCard size={10} />
+        };
+      case 'UPDATE_PLAN':
+      case 'TOGGLE_PLAN':
+        return {
+          label: 'Cập nhật gói VIP',
+          color: 'bg-[#c0c1ff]/15 text-[#c0c1ff] border-[#c0c1ff]/30',
+          icon: <CreditCard size={10} />
+        };
+      case 'DELETE_PLAN':
+        return {
+          label: 'Xóa gói VIP',
+          color: 'bg-[#93000a]/25 text-[#ffb4ab] border-[#ffb4ab]/30',
+          icon: <CreditCard size={10} />
+        };
+      default: {
+        const fallbackLabel = action
+          ? String(action).replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase())
+          : 'Hệ thống';
+        return {
+          label: fallbackLabel,
+          color: 'bg-white/5 text-[#94a3b8] border-white/10',
+          icon: <Shield size={10} />
+        };
+      }
+    }
   };
 
   const hasActiveFilters = searchQuery.trim() !== '' || statusFilter !== 'ALL' || vipFilter !== 'ALL' || dateFilter !== 'ALL' || sortOrder !== 'NEWEST';
@@ -1258,19 +1326,23 @@ export default function AdminUsersPage() {
                       Chưa ghi nhận thao tác quản trị nào lên người dùng này.
                     </div>
                   ) : (
-                    drilldownData.auditLogs.map((logItem) => (
-                      <div key={logItem.id} className="bg-[#121221] border border-white/10 rounded-lg p-2.5 space-y-1">
-                        <div className="flex items-center justify-between text-[9px] font-['JetBrains_Mono']">
-                          <span className="px-1.5 py-0.5 rounded bg-[#c0c1ff]/15 text-[#c0c1ff] font-bold">
-                            {logItem.action}
-                          </span>
-                          <span className="text-[#64748b]">
-                            bởi {logItem.adminUsername} • {formatDateTime(logItem.createdAt)}
-                          </span>
+                    drilldownData.auditLogs.map((logItem) => {
+                      const actionMeta = getAuditActionMeta(logItem.action);
+                      return (
+                        <div key={logItem.id} className="bg-[#121221] border border-white/10 rounded-lg p-2.5 space-y-1">
+                          <div className="flex items-center justify-between text-[9px] font-['JetBrains_Mono']">
+                            <span className={`px-1.5 py-0.5 rounded border flex items-center space-x-1 font-medium ${actionMeta.color}`}>
+                              {actionMeta.icon}
+                              <span>{actionMeta.label}</span>
+                            </span>
+                            <span className="text-[#64748b]">
+                              bởi {logItem.adminUsername} • {formatDateTime(logItem.createdAt)}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-[#e2e8f0]">{logItem.description}</p>
                         </div>
-                        <p className="text-[10px] text-[#e2e8f0]">{logItem.description}</p>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               )}
