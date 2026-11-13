@@ -1,7 +1,12 @@
 import logging
 from typing import Dict, List, Any
-import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+try:
+    import torch
+    from transformers import AutoTokenizer, AutoModelForSequenceClassification
+except ImportError:
+    torch = None
+    AutoTokenizer = None
+    AutoModelForSequenceClassification = None
 
 from .config import MODEL_PATHS, LABELS, MAX_LENGTH
 from .preprocessing import clean_text
@@ -20,7 +25,7 @@ class ModelManager:
     """
 
     def __init__(self):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if torch else "cpu"
         self.models: Dict[str, AutoModelForSequenceClassification] = {}
         self.tokenizers: Dict[str, AutoTokenizer] = {}
 
