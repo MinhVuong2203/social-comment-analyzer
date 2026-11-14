@@ -268,12 +268,26 @@ public class AdminSubscriptionService {
         VipPlan plan = vipPlanRepository.findById(request.vipPlanId())
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy gói VIP ID: " + request.vipPlanId()));
 
+        String userLabel = userRepository.findById(request.userId())
+                .map(u -> "@" + u.getUsername())
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng ID: " + request.userId()));
+
         int duration = (request.customDurationDays() != null && request.customDurationDays() > 0)
                 ? request.customDurationDays()
                 : plan.getDurationDays();
 
         OffsetDateTime start = OffsetDateTime.now();
         OffsetDateTime end = start.plusDays(duration);
+
+        // Đóng các gói ACTIVE cũ của user để tránh trùng lặp trạng thái ACTIVE
+        java.util.List<UserSubscription> existingSubs = userSubscriptionRepository.findByUserIdOrderByCreatedAtDesc(request.userId());
+        for (UserSubscription existing : existingSubs) {
+            if ("ACTIVE".equalsIgnoreCase(existing.getStatus())) {
+                existing.setStatus("REPLACED");
+                existing.setEndAt(start);
+                userSubscriptionRepository.save(existing);
+            }
+        }
 
         UserSubscription sub = UserSubscription.builder()
                 .userId(request.userId())
@@ -285,8 +299,44 @@ public class AdminSubscriptionService {
 
         UserSubscription saved = userSubscriptionRepository.save(sub);
         auditLogService.log("admin", "GRANT_VIP", "SUBSCRIPTION", String.valueOf(request.userId()),
-                "Cấp thủ công quyền VIP (" + plan.getPlanName() + ", " + duration + " ngày) cho User #" + request.userId());
+                "Cấp thủ công quyền VIP (" + plan.getPlanName() + ", " + duration + " ngày) cho " + userLabel);
         return saved;
+    }
+
+    /**
+     * Thu hồi quyền VIP đang hoạt động của người dùng (đưa về gói Free)
+     */
+    @Transactional
+    public java.util.Map<String, Object> revokeUserVip(Long userId) {
+        String userLabel = userRepository.findById(userId)
+                .map(u -> "@" + u.getUsername())
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người dùng ID: " + userId));
+
+        OffsetDateTime now = OffsetDateTime.now();
+        java.util.List<UserSubscription> existingSubs = userSubscriptionRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        int revokedCount = 0;
+
+        for (UserSubscription existing : existingSubs) {
+            if ("ACTIVE".equalsIgnoreCase(existing.getStatus())) {
+                existing.setStatus("CANCELLED");
+                existing.setEndAt(now);
+                userSubscriptionRepository.save(existing);
+                revokedCount++;
+            }
+        }
+
+        if (revokedCount == 0) {
+            throw new IllegalArgumentException("Người dùng " + userLabel + " hiện không có gói VIP nào đang hoạt động.");
+        }
+
+        auditLogService.log("admin", "REVOKE_VIP", "SUBSCRIPTION", String.valueOf(userId),
+                "Thu hồi sớm quyền VIP của " + userLabel + " (" + revokedCount + " gói đang hoạt động)");
+
+        return java.util.Map.of(
+                "userId", userId,
+                "revokedCount", revokedCount,
+                "message", "Đã thu hồi quyền VIP của " + userLabel + "."
+        );
     }
 
     /**

@@ -1,27 +1,33 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import '../assets/styles/TabTongQuan.css';
 
 import ThreadInfoCard from '../components/overview/ThreadInfoCard';
 import SummaryCard from '../components/overview/SummaryCard';
 import SentimentCard from '../components/overview/SentimentCard';
 import ToxicityCard from '../components/overview/ToxicityCard';
-import QuickActions from '../components/overview/QuickActions';
+import ExportReportModal from '../components/overview/ExportReportModal';
+import OverviewSkeleton from '../components/overview/OverviewSkeleton';
+
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/apiService';
 import { useAuth } from '../context/AuthContext';
 import { useVipStatus } from '../hooks/useVipStatus';
+import { useToast } from '../context/ToastContext';
 
 export default function OverviewPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const vipStatus = useVipStatus();
+  const toast = useToast();
 
   const [posts, setPosts] = useState([]);
   const [selectedPostId, setSelectedPostId] = useState(null);
   const [postAnalysis, setPostAnalysis] = useState(null);
   const [overviewStats, setOverviewStats] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [isExportOpen, setIsExportOpen] = useState(false);
 
   const loadPosts = useCallback(async () => {
     try {
@@ -56,8 +62,14 @@ export default function OverviewPage() {
   }, []);
 
   useEffect(() => {
-    loadPosts();
-    loadOverview();
+    let isMounted = true;
+    const init = async () => {
+      setLoading(true);
+      await Promise.all([loadPosts(), loadOverview()]);
+      if (isMounted) setLoading(false);
+    };
+    init();
+    return () => { isMounted = false; };
   }, [loadPosts, loadOverview]);
 
   useEffect(() => {
@@ -66,31 +78,42 @@ export default function OverviewPage() {
     }
   }, [selectedPostId, loadPostAnalysis]);
 
+  const selectedPost = useMemo(() => {
+    return posts.find((p) => p.id === selectedPostId) || null;
+  }, [posts, selectedPostId]);
+
   const handleScanPost = async () => {
     if (!selectedPostId) {
-      setErrorMsg("Vui lòng chọn một bài viết trước khi quét.");
+      const msg = "Vui lòng chọn một bài viết trước khi quét.";
+      setErrorMsg(msg);
+      toast.warning(msg);
       return;
     }
 
-    // Kiểm tra quota phía client trước (non-VIP)
     if (!vipStatus.isVipOrAdmin && vipStatus.remainingAnalysis === 0) {
-      setErrorMsg(`Bạn đã dùng hết ${vipStatus.dailyAnalyzeLimit} lần phân tích trong ngày hôm nay. Nâng cấp VIP để phân tích không giới hạn.`);
+      const msg = `Bạn đã dùng hết ${vipStatus.dailyAnalyzeLimit} lần phân tích trong ngày. Nâng cấp VIP để phân tích không giới hạn.`;
+      setErrorMsg(msg);
+      toast.warning(msg);
       return;
     }
 
     try {
       setAnalyzing(true);
       setErrorMsg(null);
+      toast.info("Đang quét bình luận và chạy mô hình PhoBERT...");
+      
       const result = await apiService.analyzePost(selectedPostId);
       setPostAnalysis(result);
       await Promise.all([loadPosts(), loadOverview(), vipStatus.refresh()]);
+      
+      toast.success("Phân tích bài viết thành công! Đã cập nhật cơ sở dữ liệu.");
     } catch (err) {
-      // Xử lý lỗi 429 quota exceeded từ server
+      let finalMsg = err.message || "Lỗi khi phân tích bài viết. Hãy chắc chắn AI Service và Backend đang chạy.";
       if (err.message && err.message.includes('429')) {
-        setErrorMsg(`Bạn đã đạt giới hạn ${vipStatus.dailyAnalyzeLimit} lần phân tích trong ngày. Nâng cấp VIP để phân tích không giới hạn.`);
-      } else {
-        setErrorMsg(err.message || "Lỗi khi phân tích bài viết. Hãy chắc chắn AI Service và Backend đang chạy.");
+        finalMsg = `Bạn đã đạt giới hạn ${vipStatus.dailyAnalyzeLimit} lần phân tích trong ngày. Nâng cấp VIP để phân tích không giới hạn.`;
       }
+      setErrorMsg(finalMsg);
+      toast.error(finalMsg);
     } finally {
       setAnalyzing(false);
     }
@@ -150,8 +173,15 @@ export default function OverviewPage() {
     total: currentTotalReplies
   };
 
-  // Hiển thị quota banner cho non-VIP
   const showQuotaBanner = !vipStatus.loading && !vipStatus.isVipOrAdmin;
+
+  if (loading) {
+    return (
+      <div className="tab-tong-quan">
+        <OverviewSkeleton />
+      </div>
+    );
+  }
 
   return (
     <div className="tab-tong-quan">
@@ -221,17 +251,26 @@ export default function OverviewPage() {
         onScan={handleScanPost}
         scanning={analyzing}
         username={user?.username}
+        avatar={user?.profilePicture || user?.profilePictureUrl || user?.profile_picture_url || user?.avatar}
+        user={user}
         canScan={vipStatus.isVipOrAdmin || vipStatus.remainingAnalysis > 0}
+        onExportReport={() => setIsExportOpen(true)}
       />
 
       <SummaryCard stats={summaryStats} />
       <SentimentCard sentiment={sentimentData} />
       <ToxicityCard toxicity={toxicityData} />
-      <QuickActions onAction={(id) => {
-        if (id === 'view-replies' || id === 'filter-toxic' || id === 'deep-analysis') {
-          navigate('/comments');
-        }
-      }} />
+
+      {/* Modal Xuất Báo Cáo */}
+      <ExportReportModal
+        isOpen={isExportOpen}
+        onClose={() => setIsExportOpen(false)}
+        post={selectedPost}
+        analysis={postAnalysis}
+        overview={overviewStats}
+        user={user}
+        onNotify={(msg, type) => toast.showToast(msg, type)}
+      />
     </div>
   );
 }
