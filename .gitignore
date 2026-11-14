@@ -3,7 +3,7 @@ ai-service/.venv/
 # Model AI được tải
 ai-service/phoBERT_models/
 ai-service/models/
-ai-service/app/__pycache__/
+**/__pycache__/
 
 # Frontend
 frontend/.env

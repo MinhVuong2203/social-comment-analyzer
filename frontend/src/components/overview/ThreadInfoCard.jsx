@@ -9,8 +9,8 @@ function PostAvatar({ src, name, username, size = 28 }) {
 
   if (src && !hasError) {
     return (
-      <div 
-        className="tic-avatar-wrap" 
+      <div
+        className="tic-avatar-wrap"
         style={{ width: size, height: size }}
       >
         <img
@@ -25,8 +25,8 @@ function PostAvatar({ src, name, username, size = 28 }) {
   }
 
   return (
-    <div 
-      className="tic-avatar-fallback" 
+    <div
+      className="tic-avatar-fallback"
       style={{ width: size, height: size, fontSize: size <= 22 ? 10 : 12 }}
       title={username}
     >
@@ -35,17 +35,18 @@ function PostAvatar({ src, name, username, size = 28 }) {
   );
 }
 
-export default function ThreadInfoCard({ 
-  posts = [], 
-  selectedPostId, 
-  onSelectPost, 
-  onScan, 
+export default function ThreadInfoCard({
+  posts = [],
+  selectedPostId,
+  onSelectPost,
+  onScan,
   scanning = false,
   username = "threads_user",
   avatar = null,
   user = null,
   canScan = true,
-  onExportReport
+  onExportReport,
+  onShowAiGuide
 }) {
   const [page, setPage] = useState(1);
 
@@ -76,11 +77,11 @@ export default function ThreadInfoCard({
     <div className="tic-wrap">
       <div className="tic-list-header">
         <div className="tic-list-header-left">
-          <PostAvatar 
-            src={userAvatar} 
-            name={user?.name} 
-            username={username} 
-            size={22} 
+          <PostAvatar
+            src={userAvatar}
+            name={user?.name}
+            username={username}
+            size={22}
           />
           <span className="tic-list-title">
             Bài viết của <strong>@{username || 'threads_user'}</strong>
@@ -88,6 +89,16 @@ export default function ThreadInfoCard({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {onShowAiGuide && (
+            <button
+              type="button"
+              className="tic-guide-btn"
+              onClick={onShowAiGuide}
+              title="Xem giải thích các chỉ số và mô hình PhoBERT"
+            >
+              Hướng dẫn AI
+            </button>
+          )}
           {onExportReport && (
             <button
               type="button"
@@ -95,7 +106,7 @@ export default function ThreadInfoCard({
               onClick={onExportReport}
               title="Xuất bản tóm tắt hoặc tải file báo cáo AI"
             >
-              📥 Xuất báo cáo
+              Xuất báo cáo
             </button>
           )}
           <span className="tic-list-count">{displayPosts.length} bài</span>
@@ -158,11 +169,11 @@ export default function ThreadInfoCard({
 
                 <div className="tic-stats">
                   {post.permalink && (
-                    <a 
-                      href={post.permalink} 
-                      target="_blank" 
-                      rel="noreferrer" 
-                      onClick={(e) => e.stopPropagation()} 
+                    <a
+                      href={post.permalink}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
                       style={{ color: 'var(--text-muted)', textDecoration: 'none' }}
                     >
                       🔗 Threads
@@ -211,9 +222,9 @@ export default function ThreadInfoCard({
         </div>
       )}
 
-      <button 
-        className="tic-scan-btn" 
-        onClick={onScan} 
+      <button
+        className="tic-scan-btn"
+        onClick={onScan}
         disabled={scanning || !canScan}
         style={{ opacity: (scanning || !canScan) ? 0.6 : 1, cursor: (scanning || !canScan) ? 'not-allowed' : 'pointer' }}
         title={!canScan ? 'Bạn đã hết lượt phân tích hôm nay. Nâng cấp VIP để phân tích không giới hạn.' : undefined}
