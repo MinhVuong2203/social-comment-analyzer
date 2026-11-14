@@ -7,6 +7,7 @@ import SentimentCard from '../components/overview/SentimentCard';
 import ToxicityCard from '../components/overview/ToxicityCard';
 import ExportReportModal from '../components/overview/ExportReportModal';
 import OverviewSkeleton from '../components/overview/OverviewSkeleton';
+import AiGuideModal from '../components/common/AiGuideModal';
 
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/apiService';
@@ -28,6 +29,7 @@ export default function OverviewPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isAiGuideOpen, setIsAiGuideOpen] = useState(false);
 
   const loadPosts = useCallback(async () => {
     try {
@@ -255,6 +257,7 @@ export default function OverviewPage() {
         user={user}
         canScan={vipStatus.isVipOrAdmin || vipStatus.remainingAnalysis > 0}
         onExportReport={() => setIsExportOpen(true)}
+        onShowAiGuide={() => setIsAiGuideOpen(true)}
       />
 
       <SummaryCard stats={summaryStats} />
@@ -270,6 +273,12 @@ export default function OverviewPage() {
         overview={overviewStats}
         user={user}
         onNotify={(msg, type) => toast.showToast(msg, type)}
+      />
+
+      {/* Modal Hướng Dẫn & Giải Thích AI */}
+      <AiGuideModal
+        isOpen={isAiGuideOpen}
+        onClose={() => setIsAiGuideOpen(false)}
       />
     </div>
   );

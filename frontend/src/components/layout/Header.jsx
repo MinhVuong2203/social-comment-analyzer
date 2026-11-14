@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Settings, Minus, X, LogOut } from 'lucide-react';
+import { Settings, Minus, X, LogOut, HelpCircle } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import AiGuideModal from '../common/AiGuideModal';
 import './Header.css';
 
 const TABS = [
@@ -18,6 +19,7 @@ export default function Header() {
   const location = useLocation();
   const { user, logout } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [showAiGuide, setShowAiGuide] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -81,6 +83,12 @@ export default function Header() {
           </button>
 
           <div className="window-controls">
+            <HelpCircle
+              size={14}
+              className="control-icon"
+              title="Hướng dẫn mô hình PhoBERT AI"
+              onClick={() => setShowAiGuide(true)}
+            />
             <Settings
               size={14}
               className="control-icon"
@@ -114,6 +122,10 @@ export default function Header() {
         ))}
       </div>
 
+      <AiGuideModal
+        isOpen={showAiGuide}
+        onClose={() => setShowAiGuide(false)}
+      />
     </div>
   );
 }
